@@ -12,6 +12,13 @@
 - Use the Node.js version pinned in `.node-version` for tests and OpenClaw itself; do not launch the Gateway under Bun.
 - Keep external package dependencies external in the Node-targeted ESM build.
 
+## Documentation
+
+- Keep `README.md` focused on installation, the common target-plugin path, and first verification.
+- Put OpenClaw integration, CLI, configuration, logging, and operational detail in `OPENCLAW.md`.
+- Put contributor setup, validation, dogfooding, and release mechanics in `DEVELOPMENT.md`.
+- Treat `SPEC.md` as product intent and `CHANGELOG.md` as the record of implemented changes.
+
 ## OpenClaw integration
 
 - Inspect the installed OpenClaw SDK types, stable `openclaw/plugin-sdk/*` exports, and bundled plugin patterns before creating local logging, error, runtime, command, or CLI UX mechanisms.

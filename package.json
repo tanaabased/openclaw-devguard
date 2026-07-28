@@ -23,10 +23,13 @@
     "dist/",
     "index.ts",
     "cli/",
+    "assets/",
     "lib/",
     "utils/",
     "openclaw.plugin.json",
     "README.md",
+    "OPENCLAW.md",
+    "DEVELOPMENT.md",
     "CHANGELOG.md",
     "SPEC.md",
     "LICENSE"

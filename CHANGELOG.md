@@ -9,3 +9,4 @@
 - Kept subcommand implementations in `cli/`, moved shared CLI wiring to `lib/`, adopted prefixed SDK logging and error formatting with debug lifecycle and watch events, and pinned the repository Node.js runtime.
 - Added an installable OpenClaw plugin and explicit unfinished-command failures.
 - Added pull-request, packed-release, and trusted npm publishing workflows.
+- Reorganized documentation around a concise README, a complete OpenClaw workflow guide, and a DevGuard development guide.
