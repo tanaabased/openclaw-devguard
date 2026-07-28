@@ -17,8 +17,12 @@ describe('lib/logger', () => {
       new Error('token=supersecret', { cause: new Error('nested failure') }),
     );
 
-    assert.equal(message, 'token=*** | nested failure');
-    assert.deepEqual(errors, ['[devguard] build failed: token=*** | nested failure']);
+    assert.match(message, /token=\*\*\*/);
+    assert.match(message, /nested failure/);
+    assert.doesNotMatch(message, /supersecret/);
+    assert.equal(errors.length, 1);
+    assert.match(errors[0] ?? '', /^\[devguard\] build failed:/);
+    assert.doesNotMatch(errors[0] ?? '', /supersecret/);
   });
 
   it('should prefix operational and optional debug messages', () => {

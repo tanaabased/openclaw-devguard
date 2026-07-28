@@ -4,6 +4,7 @@ import type { PluginLogger } from 'openclaw/plugin-sdk/plugin-entry';
 
 import plugin from '../index.ts';
 import { type CommandLike } from '../lib/register-cli.ts';
+import { TOOL_GUARD_PRIORITY } from '../lib/tool-guard.ts';
 
 describe('index', () => {
   it('should expose the official plugin entry contract', () => {
@@ -25,7 +26,7 @@ describe('index', () => {
     let gatewayMethod: string | undefined;
     const api = {
       id: 'openclaw-devguard',
-      version: '0.0.0',
+      version: 'test-build',
       rootDir: process.cwd(),
       registrationMode: 'full',
       logger: {
@@ -62,13 +63,11 @@ describe('index', () => {
     assert.equal(options?.descriptors?.[0]?.name, 'devguard');
     assert.equal(typeof registrar, 'function');
     assert.equal(hook?.name, 'before_tool_call');
-    assert.equal(hook?.priority, 1_000_000);
+    assert.equal(hook?.priority, TOOL_GUARD_PRIORITY);
     assert.equal(gatewayMethod, 'devguard.status');
-    assert.deepEqual(infoMessages, ['[devguard] deny policy registered with priority 1000000']);
-    assert.deepEqual(debugMessages.slice(0, 1), [
-      '[devguard] initializing plugin runtime openclaw-devguard (0.0.0)',
-    ]);
-    assert.equal(debugMessages.length, 2);
-    assert.match(debugMessages[1] ?? '', /^\[devguard\] audit log configured at /);
+    assert.ok(infoMessages.some((message) => message.includes(String(TOOL_GUARD_PRIORITY))));
+    assert.ok(
+      debugMessages.some((message) => message.includes(api.id) && message.includes(api.version)),
+    );
   });
 });

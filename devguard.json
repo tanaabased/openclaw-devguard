@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "plugin": {
+    "id": "openclaw-devguard",
+    "build": {
+      "command": "bun",
+      "args": ["run", "build"]
+    },
+    "watch": [
+      "cli",
+      "lib",
+      "utils",
+      "index.ts",
+      "openclaw.plugin.json",
+      "package.json",
+      "tsconfig.json"
+    ]
+  },
+  "logging": {
+    "environmentValueAllowlist": []
+  },
+  "gateway": {
+    "port": 19001
+  }
+}

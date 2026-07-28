@@ -38,7 +38,7 @@ git clone https://github.com/tanaabased/openclaw-devguard.git
 cd openclaw-devguard
 bun install
 bun run build
-openclaw plugins install --link . --force
+openclaw plugins install --link .
 openclaw plugins enable openclaw-devguard
 ```
 

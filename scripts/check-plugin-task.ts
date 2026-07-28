@@ -12,7 +12,7 @@ const [packageContents, manifestContents, nodeVersionContents] = await Promise.a
 ]);
 const packageMetadata = JSON.parse(packageContents) as PackageMetadata;
 const manifest = JSON.parse(manifestContents) as PluginManifest;
-const failures = pluginMetadataFailures(packageMetadata, manifest);
+const failures = pluginMetadataFailures(packageMetadata, manifest).map(({ message }) => message);
 const nodeVersion = nodeVersionContents.trim();
 const nodeRange = packageMetadata.engines?.node;
 

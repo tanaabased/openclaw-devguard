@@ -39,6 +39,12 @@ bun run plugin:check
 
 Run the narrowest relevant check first while iterating, then complete this repository-only suite before handoff.
 
+Filesystem notification behavior is kept outside the default unit suite. Run its focused integration check only when watcher behavior is directly in scope:
+
+```sh
+bun run test:integration
+```
+
 ## Live Development
 
 The lower-level loop develops DevGuard in OpenClaw's built-in `--dev` profile:
@@ -54,7 +60,7 @@ To dogfood the product-facing workflow instead:
 
 ```sh
 bun run build
-openclaw plugins install --link . --force
+openclaw plugins install --link .
 openclaw plugins enable openclaw-devguard
 openclaw devguard init .
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run

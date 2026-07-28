@@ -7,7 +7,7 @@ import pluginMetadataFailures, {
 
 const packageMetadata: PackageMetadata = {
   name: '@tanaabased/openclaw-devguard',
-  version: '0.0.0',
+  version: 'test-version',
   openclaw: {
     extensions: ['./index.ts'],
     runtimeExtensions: ['./dist/index.js'],
@@ -16,7 +16,7 @@ const packageMetadata: PackageMetadata = {
 
 const manifest: PluginManifest = {
   id: 'openclaw-devguard',
-  version: '0.0.0',
+  version: 'test-version',
   activation: {
     onStartup: true,
   },
@@ -34,32 +34,37 @@ describe('utils/plugin-metadata-failures', () => {
   });
 
   it('should report every scaffold contract mismatch', () => {
-    assert.deepEqual(pluginMetadataFailures({}, {}), [
-      'unexpected npm package name',
-      'unexpected OpenClaw plugin id',
-      'source entry missing',
-      'runtime entry missing',
-      'plugin must activate on startup',
-      'CLI command ownership is missing',
-      'config schema must describe an object',
-      'config schema must be strict',
-      'logging config is missing',
-    ]);
+    assert.deepEqual(
+      new Set(pluginMetadataFailures({}, {}).map(({ code }) => code)),
+      new Set([
+        'package-name',
+        'plugin-id',
+        'source-entry',
+        'runtime-entry',
+        'startup-activation',
+        'cli-command',
+        'config-schema-type',
+        'config-schema-strictness',
+        'logging-config',
+      ]),
+    );
   });
 
   it('should report version and configuration drift independently', () => {
     assert.deepEqual(
-      pluginMetadataFailures(
-        { ...packageMetadata, version: '1.0.0' },
-        {
-          ...manifest,
-          configSchema: {
-            ...manifest.configSchema,
-            properties: {},
+      new Set(
+        pluginMetadataFailures(
+          { ...packageMetadata, version: 'other-version' },
+          {
+            ...manifest,
+            configSchema: {
+              ...manifest.configSchema,
+              properties: {},
+            },
           },
-        },
+        ).map(({ code }) => code),
       ),
-      ['package and manifest versions differ', 'logging config is missing'],
+      new Set(['version-mismatch', 'logging-config']),
     );
   });
 });

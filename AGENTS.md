@@ -10,6 +10,7 @@
 
 - Use the Bun version pinned in `.bun-version` for installs, scripts, and builds.
 - Use the Node.js version pinned in `.node-version` for tests and OpenClaw itself; do not launch the Gateway under Bun.
+- Keep TypeScript projects aligned with their runtime boundaries: root source uses Node.js types, development scripts use Bun and Node.js types, and tests use Mocha and Node.js types.
 - Keep external package dependencies external in the Node-targeted ESM build.
 
 ## Documentation
@@ -26,9 +27,18 @@
 - Keep normal command output separate from diagnostic logging, and retain a small local abstraction when the SDK mechanism does not preserve the required CLI behavior.
 - Do not import private, hashed, or otherwise unexported OpenClaw implementation modules.
 
+## Test design
+
+- Assert exact values only for stable public, protocol, configuration, and safety contracts.
+- For diagnostic logs and human-readable errors, assert the owned semantic signal instead of duplicating complete prose in unrelated specs.
+- Derive real version expectations from their canonical metadata source; use clearly synthetic versions for fixtures.
+- Keep wall-clock waits, filesystem notifications, process timing, and other environment-sensitive behavior out of unit tests; use deterministic injected boundaries or a separately invoked integration check.
+- Test local adapter decisions rather than re-testing third-party library behavior.
+
 ## Validation
 
 - Run `bun run lint`, `bun run typecheck`, `bun run test`, `bun run build`, and `bun run plugin:check` for implementation changes.
+- Run `bun run test:integration` only when filesystem-watcher behavior is directly in scope.
 - Do not run `bun run release:test`, direct `openclaw` commands, plugin installation, or Gateway startup unless the user explicitly requests operational validation.
 - Do not run Leia scenarios or other operational tests from `examples/` locally unless the user explicitly requests them; prefer CI for those scenarios.
 - When operational validation is explicitly requested, use isolated OpenClaw state.

@@ -7,5 +7,5 @@ async function run(command: string, args: string[]): Promise<void> {
 }
 
 await run('bun', ['run', 'build']);
-await run('openclaw', ['--dev', 'plugins', 'install', '--link', '.', '--force']);
+await run('openclaw', ['--dev', 'plugins', 'install', '--link', '.']);
 await run('openclaw', ['--dev', 'plugins', 'enable', 'openclaw-devguard']);

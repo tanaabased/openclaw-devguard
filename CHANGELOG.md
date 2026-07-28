@@ -10,3 +10,4 @@
 - Added an installable OpenClaw plugin and explicit unfinished-command failures.
 - Added pull-request, packed-release, and trusted npm publishing workflows.
 - Reorganized documentation around a concise README, a complete OpenClaw workflow guide, and a DevGuard development guide.
+- Corrected source-linked plugin setup to omit OpenClaw's unsupported `--force` flag.

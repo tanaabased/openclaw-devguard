@@ -1,13 +1,14 @@
-import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { watch, type FSWatcher } from 'node:fs';
-import { appendFile, mkdir, readFile, stat } from 'node:fs/promises';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+
+import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
 import createDevRunner from '../lib/dev-runner.ts';
 import { defaultCliOutput, type CliOutput } from '../lib/cli-output.ts';
+import waitForGatewayStatus, { type GatewayStatus } from '../lib/gateway-status.ts';
 import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
-import processCommand from '../lib/process-command.ts';
+import createProjectWatcher from '../lib/project-watcher.ts';
 import {
   DEVGUARD_PROJECT_FILE,
   readProjectConfig,
@@ -23,15 +24,6 @@ export interface RunDevguardOptions {
   startupTimeoutMs?: number;
 }
 
-interface GatewayStatus {
-  pluginId?: string;
-  pluginBuildId?: string;
-  hookRegistered?: boolean;
-  policyMode?: string;
-  logPath?: string;
-  gatewayProcessId?: number;
-}
-
 async function appendRuntimeEvent(logPath: string, event: Record<string, unknown>): Promise<void> {
   await mkdir(dirname(logPath), { recursive: true });
   await appendFile(
@@ -45,41 +37,6 @@ function recordRuntimeEvent(logPath: string, event: Record<string, unknown>, log
   void appendRuntimeEvent(logPath, event).catch((error: unknown) => {
     reportError(logger, 'could not append a lifecycle event', error);
   });
-}
-
-function parseJsonOutput(output: string): unknown {
-  const start = output.indexOf('{');
-  const end = output.lastIndexOf('}');
-  if (start < 0 || end < start) throw new Error(`Gateway returned no JSON payload:\n${output}`);
-  return JSON.parse(output.slice(start, end + 1));
-}
-
-async function waitForGatewayStatus(
-  environment: NodeJS.ProcessEnv,
-  buildId: string,
-  timeoutMs: number,
-): Promise<GatewayStatus> {
-  const deadline = Date.now() + timeoutMs;
-  let lastOutput = '';
-
-  while (Date.now() < deadline) {
-    const result = await processCommand(
-      'openclaw',
-      ['gateway', 'call', 'devguard.status', '--json', '--timeout', '2000'],
-      { env: environment, allowFailure: true },
-    );
-    lastOutput = result.output;
-    if (result.code === 0) {
-      const status = parseJsonOutput(result.output) as GatewayStatus;
-      assert.equal(status.pluginBuildId, buildId, 'Gateway loaded an unexpected plugin build');
-      assert.equal(status.hookRegistered, true, 'Gateway did not register the DevGuard hook');
-      assert.equal(status.policyMode, 'deny', 'Gateway is not using DevGuard deny mode');
-      return status;
-    }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
-  }
-
-  throw new Error(`DevGuard Gateway did not become ready within ${timeoutMs}ms\n${lastOutput}`);
 }
 
 export default async function runDevguard(
@@ -112,6 +69,11 @@ export default async function runDevguard(
     }
     throw error;
   }
+  const gatewayToken = (
+    await readFile(join(paths.projectStateRoot, 'gateway-token'), 'utf8')
+  ).trim();
+  if (gatewayToken.length === 0) throw new Error('DevGuard isolated Gateway token is empty');
+  const gatewayUrl = `ws://127.0.0.1:${config.gateway.port}`;
 
   let buildSequence = 0;
   let buildId = '';
@@ -181,6 +143,7 @@ export default async function runDevguard(
       );
     },
     onGatewayStarted(child: ChildProcess) {
+      const expectedBuildId = buildId;
       logDebug(
         options.logger,
         `Gateway process started for ${config.plugin.id} (pid ${child.pid ?? 'unknown'})`,
@@ -190,34 +153,43 @@ export default async function runDevguard(
         {
           event: 'gateway_started',
           pluginId: config.plugin.id,
-          pluginBuildId: buildId,
+          pluginBuildId: expectedBuildId,
           gatewayProcessId: child.pid,
         },
         options.logger,
       );
-      void waitForGatewayStatus(
-        isolatedEnvironment(),
-        buildId,
-        options.startupTimeoutMs ?? 20_000,
-      ).then(
+      void waitForGatewayStatus({
+        expectedBuildId,
+        isCurrent: () => buildId === expectedBuildId,
+        queryStatus: () =>
+          callGatewayFromCli(
+            'devguard.status',
+            { json: true, timeout: '2000', token: gatewayToken, url: gatewayUrl },
+            {},
+            { deviceIdentity: null, progress: false },
+          ),
+        timeoutMs: options.startupTimeoutMs ?? 20_000,
+      }).then(
         (status) => {
+          if (!status || buildId !== expectedBuildId) return;
           gatewayStatus = status;
           logInfo(
             options.logger,
             `Gateway verified for ${config.plugin.id} (${status.pluginBuildId ?? 'unknown'})`,
           );
           output.writeStdout(
-            `DevGuard ready: build ${status.pluginBuildId ?? 'unknown'}, hook active, log ${status.logPath ?? paths.logPath}\n`,
+            `DevGuard is ready: build ${status.pluginBuildId ?? 'unknown'}, hook active, log ${status.logPath ?? paths.logPath}\n`,
           );
           resolveReady(status);
         },
         (error) => {
+          if (buildId !== expectedBuildId) return;
           recordRuntimeEvent(
             paths.logPath,
             {
               event: 'gateway_start_failed',
               pluginId: config.plugin.id,
-              pluginBuildId: buildId,
+              pluginBuildId: expectedBuildId,
               error: reportError(options.logger, 'Gateway startup failed', error),
             },
             options.logger,
@@ -241,29 +213,25 @@ export default async function runDevguard(
     },
   });
 
-  const watchers: FSWatcher[] = [];
-  for (const configuredPath of config.plugin.watch) {
-    const absolutePath = join(root, configuredPath);
-    const pathStats = await stat(absolutePath);
-    watchers.push(
-      watch(absolutePath, { recursive: pathStats.isDirectory() }, (eventType, filename) => {
-        const changedPath =
-          filename && pathStats.isDirectory()
-            ? join(absolutePath, filename.toString())
-            : absolutePath;
-        logDebug(options.logger, `watch event ${eventType}: ${changedPath}`);
-        runner.requestBuild();
-      }),
-    );
-  }
+  const watcher = await createProjectWatcher({
+    root,
+    paths: config.plugin.watch,
+    onChange: ({ event, path }) => {
+      logDebug(options.logger, `watch event ${event}: ${path}`);
+      runner.requestBuild();
+    },
+    onError: (error) => {
+      reportError(options.logger, 'project watcher failed', error);
+    },
+  });
   logDebug(
     options.logger,
-    `watching ${watchers.length} configured path${watchers.length === 1 ? '' : 's'} for ${config.plugin.id}`,
+    `watching ${config.plugin.watch.length} configured path${config.plugin.watch.length === 1 ? '' : 's'} for ${config.plugin.id}`,
   );
 
   const shutdown = async (): Promise<void> => {
     logDebug(options.logger, `stopping supervision for ${config.plugin.id}`);
-    for (const watcher of watchers) watcher.close();
+    await watcher.close();
     await runner.stop();
   };
   runner.requestBuild();
