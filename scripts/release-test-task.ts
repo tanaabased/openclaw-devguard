@@ -63,10 +63,17 @@ try {
     'lib/cli-output.ts',
     'lib/logger.ts',
     'lib/register-cli.ts',
+    'README.md',
+    'OPENCLAW.md',
+    'DEVELOPMENT.md',
+    'CHANGELOG.md',
+    'LICENSE',
+    'assets/openclaw.png',
   ];
   for (const path of requiredPaths) {
     assert.equal(packedPaths.has(path), true, `packed plugin is missing ${path}`);
   }
+  assert.equal(packedPaths.has('SPEC.md'), false, 'packed plugin must exclude SPEC.md');
 
   assert.match(packageResult.filename, /\.tgz$/);
   await access(join(temporaryRoot, packageResult.filename));

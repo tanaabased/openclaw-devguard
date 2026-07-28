@@ -28,7 +28,7 @@ DevGuard:
 - verifies the live plugin build and deny hook
 - records redacted tool-call attempts and blocks every tool
 
-The [OpenClaw guide](./OPENCLAW.md) covers the complete target-plugin workflow and CLI. [SPEC.md](./SPEC.md) records product intent and the threat model; it is not evidence that a feature is implemented.
+The [OpenClaw guide](./OPENCLAW.md) covers the complete target-plugin workflow and CLI.
 
 ## Quickstart
 
