@@ -29,11 +29,11 @@ openclaw devguard init "$TMPDIR/plugin" 2>&1 | tee "$TMPDIR/init-second.log"
 # should create the inferred project configuration
 test -f "$TMPDIR/plugin/devguard.json"
 grep -F '"id": "devguard-example"' "$TMPDIR/plugin/devguard.json"
-grep -F "Configuration: created" "$TMPDIR/init-first.log"
+grep -F "config       created" "$TMPDIR/init-first.log"
 
 # should build the fixture plugin
 test -f "$TMPDIR/plugin/dist/index.js"
 
 # should report reused project configuration
-grep -F "Configuration: reused" "$TMPDIR/init-second.log"
+grep -F "config       reused" "$TMPDIR/init-second.log"
 ```

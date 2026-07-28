@@ -68,6 +68,7 @@ jobs:
         shell: bash
         env:
           DEVGUARD_HOME: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp/devguard-home
+          NO_COLOR: '1'
           OPENCLAW_SKIP_CHANNELS: '1'
           OPENCLAW_STATE_DIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp/openclaw
           TMPDIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp

@@ -26,6 +26,6 @@ set -o pipefail
 
 ```bash
 # should report the verified live build and hook
-grep -F "DevGuard ready: build" "$TMPDIR/run.log"
-grep -F "hook active" "$TMPDIR/run.log"
+grep -F "ready        devguard-example" "$TMPDIR/run.log"
+grep -F "hook         active" "$TMPDIR/run.log"
 ```
