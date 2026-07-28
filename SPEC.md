@@ -236,16 +236,16 @@ DevGuard should register a high-priority `before_tool_call` hook.
 
 Default policy:
 
-| Tool category | Default |
-|---|---|
-| Pure inspection or read-only tools | Configurable |
-| Filesystem mutation | Block and log |
-| `exec` and process execution | Block and log |
-| Network and external services | Block and log |
-| Browser and computer control | Block and log |
-| Messaging | Block and log |
+| Tool category                          | Default       |
+| -------------------------------------- | ------------- |
+| Pure inspection or read-only tools     | Configurable  |
+| Filesystem mutation                    | Block and log |
+| `exec` and process execution           | Block and log |
+| Network and external services          | Block and log |
+| Browser and computer control           | Block and log |
+| Messaging                              | Block and log |
 | Cron, Gateway, and node administration | Block and log |
-| Unknown plugin tools | Block and log |
+| Unknown plugin tools                   | Block and log |
 
 ### Modes
 
@@ -338,19 +338,11 @@ Example event:
     "command": "npm publish"
   },
   "derivedPaths": [],
-  "effects": [
-    "process",
-    "network",
-    "external-state"
-  ],
+  "effects": ["process", "network", "external-state"],
   "decision": "blocked",
   "reason": "DevGuard deny mode",
   "environment": {
-    "keys": [
-      "PATH",
-      "HOME",
-      "GH_TOKEN"
-    ],
+    "keys": ["PATH", "HOME", "GH_TOKEN"],
     "values": "redacted"
   }
 }

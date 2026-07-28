@@ -1,18 +1,20 @@
 {
   "compilerOptions": {
+    "lib": ["ESNext"],
     "target": "ESNext",
     "module": "Preserve",
-    "moduleResolution": "Bundler",
-    "types": ["bun", "mocha"],
+    "moduleDetection": "force",
     "allowJs": true,
+    "types": ["node"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true
+    "noImplicitOverride": true
   },
-  "include": ["index.ts", "lib/**/*.ts", "utils/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+  "include": ["index.ts", "lib/**/*.ts", "utils/**/*.ts"]
 }

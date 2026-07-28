@@ -5,11 +5,7 @@ import chokidar from 'chokidar';
 import createDevRunner from '../lib/dev-runner.ts';
 
 const runner = createDevRunner({
-  build: async () => {
-    const child = spawn('bun', ['run', 'build'], { stdio: 'inherit' });
-    const code = await new Promise<number | null>((resolve) => child.once('exit', resolve));
-    if (code !== 0) throw new Error(`build failed with exit code ${code ?? 1}`);
-  },
+  startBuild: () => spawn('bun', ['run', 'build'], { stdio: 'inherit' }),
   startGateway: () =>
     spawn('openclaw', ['--dev', 'gateway', 'run'], {
       stdio: 'inherit',
@@ -32,7 +28,7 @@ const watcher = chokidar.watch(
     'utils/**/*.ts',
     'openclaw.plugin.json',
     'package.json',
-    'tsconfig.json',
+    'tsconfig*.json',
   ],
   { ignoreInitial: true },
 );

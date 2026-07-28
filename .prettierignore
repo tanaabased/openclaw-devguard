@@ -3,6 +3,6 @@ dist
 coverage
 tmp
 temp
+cache
 .cache
 bun.lock
-SPEC.md

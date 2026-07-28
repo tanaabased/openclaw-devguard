@@ -1,51 +1,95 @@
 import { builtinModules } from 'node:module';
 
-import eslint from '@eslint/js';
+import js from '@eslint/js';
 import { defineConfig, globalIgnores } from 'eslint/config';
-import prettier from 'eslint-config-prettier';
+import prettierConfig from 'eslint-config-prettier';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-const builtins = builtinModules.filter((name) => !name.startsWith('node:'));
+const restrictedBuiltinImports = builtinModules
+  .filter((name) => !name.startsWith('_') && !name.startsWith('node:'))
+  .map((name) => ({
+    name,
+    message: `Use node:${name} instead of bare builtin imports.`,
+  }));
 
 export default defineConfig([
-  globalIgnores(['node_modules/**', 'dist/**', 'coverage/**', 'tmp/**', 'temp/**', '.cache/**']),
+  globalIgnores([
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/coverage/**',
+    '**/tmp/**',
+    '**/temp/**',
+    '**/cache/**',
+    '**/.cache/**',
+  ]),
+  js.configs.recommended,
   {
-    files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
-    extends: [eslint.configs.recommended],
+    files: ['**/*.{js,mjs,ts,tsx}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
         ...globals.node,
-        ...globals.es2024,
+        URL: 'readonly',
       },
     },
     rules: {
       'no-console': 'warn',
       'no-debugger': 'error',
       'no-duplicate-imports': 'error',
-      'no-restricted-imports': ['error', { paths: builtins }],
-    },
-  },
-  ...tseslint.configs.recommended.map((config) => ({
-    ...config,
-    files: ['**/*.{ts,mts,cts}'],
-  })),
-  {
-    files: ['**/*.{ts,mts,cts}'],
-    rules: {
-      '@typescript-eslint/consistent-type-imports': [
+      'no-restricted-imports': [
         'error',
-        { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
+        {
+          paths: restrictedBuiltinImports,
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.type='Identifier'][callee.name='require']",
+          message: 'Use ESM imports instead of require() in module files.',
+        },
+        {
+          selector:
+            "AssignmentExpression[left.type='MemberExpression'][left.object.type='Identifier'][left.object.name='module'][left.property.type='Identifier'][left.property.name='exports']",
+          message: 'Use ESM exports instead of module.exports in module files.',
+        },
+        {
+          selector:
+            "AssignmentExpression[left.type='MemberExpression'][left.object.type='Identifier'][left.object.name='exports']",
+          message: 'Use ESM named exports instead of exports.* assignments in module files.',
+        },
       ],
     },
   },
   {
-    files: ['test/**/*.spec.ts'],
+    files: ['**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
+      globals: globals.node,
+    },
+    rules: {
+      'no-console': 'warn',
+      'no-debugger': 'error',
+    },
+  },
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ['**/*.{ts,tsx}'],
+  })),
+  {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'error',
+    },
+  },
+  {
+    files: ['test/**/*.{js,mjs,cjs,ts,tsx}', '**/*.{spec,test}.{js,mjs,cjs,ts,tsx}'],
     languageOptions: {
       globals: globals.mocha,
     },
   },
-  prettier,
+  prettierConfig,
 ]);
