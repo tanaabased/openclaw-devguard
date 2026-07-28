@@ -1,5 +1,6 @@
 import initDevguard from '../cli/init.ts';
 import runDevguard from '../cli/run.ts';
+import tailDevguard from '../cli/tail.ts';
 import notImplemented from '../utils/not-implemented.ts';
 import { defaultCliOutput, type CliOutput } from './cli-output.ts';
 import { type Logger, reportError } from './logger.ts';
@@ -75,7 +76,16 @@ export default function registerDevguardCli(
     .command('tail')
     .description('Tail DevGuard events.')
     .option('--json', 'Emit newline-delimited JSON events.')
-    .action(() => notImplemented('tail'));
+    .action(async (commandOptions: unknown) => {
+      const flags = (commandOptions ?? {}) as { json?: boolean };
+      await runCliAction(options.logger, 'tail failed', async () => {
+        await tailDevguard(process.cwd(), {
+          json: flags.json,
+          logger: options.logger,
+          output,
+        });
+      });
+    });
 
   devguard
     .command('doctor')

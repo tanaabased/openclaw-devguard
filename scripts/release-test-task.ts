@@ -60,6 +60,7 @@ try {
     'index.ts',
     'cli/init.ts',
     'cli/run.ts',
+    'cli/tail.ts',
     'lib/cli-output.ts',
     'lib/logger.ts',
     'lib/register-cli.ts',

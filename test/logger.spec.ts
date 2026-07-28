@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
+import { logDebug, logInfo, type Logger, logWarn, reportError } from '../lib/logger.ts';
 
 describe('lib/logger', () => {
   it('should format and redact errors before sending them to the plugin logger', () => {
@@ -30,16 +30,18 @@ describe('lib/logger', () => {
     const logger: Logger = {
       debug: (message) => messages.push(`debug:${message}`),
       info: (message) => messages.push(`info:${message}`),
-      warn() {},
+      warn: (message) => messages.push(`warn:${message}`),
       error() {},
     };
 
     logDebug(logger, 'watch event change: src/index.ts');
     logInfo(logger, 'build succeeded');
+    logWarn(logger, 'ignored malformed audit record');
 
     assert.deepEqual(messages, [
       'debug:[devguard] watch event change: src/index.ts',
       'info:[devguard] build succeeded',
+      'warn:[devguard] ignored malformed audit record',
     ]);
   });
 
