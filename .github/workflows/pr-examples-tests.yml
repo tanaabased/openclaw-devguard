@@ -24,6 +24,11 @@ jobs:
           - install
           - init
           - run
+          - tail
+          - doctor
+          - restore
+          - restart
+          - deny
     steps:
       - name: Checkout code
         uses: actions/checkout@v7

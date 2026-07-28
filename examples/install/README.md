@@ -30,4 +30,7 @@ openclaw plugins doctor
 openclaw devguard --help | grep -F "init"
 openclaw devguard --help | grep -F "run"
 openclaw devguard run --help | grep -F -- "--once"
+openclaw devguard tail --help | grep -F -- "--no-follow"
+openclaw devguard --help | grep -F "doctor"
+openclaw devguard --help | grep -F "restore"
 ```
