@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+tmp
+temp
+.cache
+bun.lock
+SPEC.md
