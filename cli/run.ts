@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
-import createDevRunner from '../lib/dev-runner.ts';
+import createDevRunner, { type GatewayExit } from '../lib/dev-runner.ts';
 import { defaultCliOutput, type CliOutput } from '../lib/cli-output.ts';
 import waitForGatewayStatus, { type GatewayStatus } from '../lib/gateway-status.ts';
 import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
@@ -37,6 +37,16 @@ function recordRuntimeEvent(logPath: string, event: Record<string, unknown>, log
   void appendRuntimeEvent(logPath, event).catch((error: unknown) => {
     reportError(logger, 'could not append a lifecycle event', error);
   });
+}
+
+function unexpectedGatewayExit(exit: GatewayExit): Error {
+  if (exit.error !== undefined) {
+    return new Error('DevGuard Gateway process failed unexpectedly', { cause: exit.error });
+  }
+  if (exit.signal) {
+    return new Error(`DevGuard Gateway exited unexpectedly with signal ${exit.signal}`);
+  }
+  return new Error(`DevGuard Gateway exited unexpectedly with code ${String(exit.code)}`);
 }
 
 export default async function runDevguard(
@@ -77,12 +87,17 @@ export default async function runDevguard(
 
   let buildSequence = 0;
   let buildId = '';
+  let activeGatewayBuildId: string | undefined;
   let gatewayStatus: GatewayStatus | undefined;
   let resolveReady!: (status: GatewayStatus) => void;
   let rejectReady!: (error: unknown) => void;
   const ready = new Promise<GatewayStatus>((resolvePromise, rejectPromise) => {
     resolveReady = resolvePromise;
     rejectReady = rejectPromise;
+  });
+  let resolveGatewayFailure!: (error: Error) => void;
+  const gatewayFailure = new Promise<Error>((resolvePromise) => {
+    resolveGatewayFailure = resolvePromise;
   });
   const isolatedEnvironment = (): NodeJS.ProcessEnv => ({
     ...environment,
@@ -129,6 +144,7 @@ export default async function runDevguard(
       );
     },
     onBuildSucceeded() {
+      activeGatewayBuildId = undefined;
       buildSequence += 1;
       buildId = `${new Date().toISOString()}#${buildSequence}`;
       logInfo(options.logger, `build succeeded for ${config.plugin.id} (${buildId})`);
@@ -144,6 +160,7 @@ export default async function runDevguard(
     },
     onGatewayStarted(child: ChildProcess) {
       const expectedBuildId = buildId;
+      activeGatewayBuildId = expectedBuildId;
       logDebug(
         options.logger,
         `Gateway process started for ${config.plugin.id} (pid ${child.pid ?? 'unknown'})`,
@@ -160,7 +177,7 @@ export default async function runDevguard(
       );
       void waitForGatewayStatus({
         expectedBuildId,
-        isCurrent: () => buildId === expectedBuildId,
+        isCurrent: () => activeGatewayBuildId === expectedBuildId,
         queryStatus: () =>
           callGatewayFromCli(
             'devguard.status',
@@ -171,7 +188,7 @@ export default async function runDevguard(
         timeoutMs: options.startupTimeoutMs ?? 20_000,
       }).then(
         (status) => {
-          if (!status || buildId !== expectedBuildId) return;
+          if (!status || activeGatewayBuildId !== expectedBuildId) return;
           gatewayStatus = status;
           logInfo(
             options.logger,
@@ -183,7 +200,7 @@ export default async function runDevguard(
           resolveReady(status);
         },
         (error) => {
-          if (buildId !== expectedBuildId) return;
+          if (activeGatewayBuildId !== expectedBuildId) return;
           recordRuntimeEvent(
             paths.logPath,
             {
@@ -197,6 +214,25 @@ export default async function runDevguard(
           rejectReady(error);
         },
       );
+    },
+    onGatewayExit(exit) {
+      activeGatewayBuildId = undefined;
+      const error = unexpectedGatewayExit(exit);
+      const message = reportError(options.logger, 'Gateway exited', error);
+      recordRuntimeEvent(
+        paths.logPath,
+        {
+          event: 'gateway_exited',
+          pluginId: config.plugin.id,
+          pluginBuildId: buildId,
+          exitCode: exit.code,
+          exitSignal: exit.signal,
+          error: message,
+        },
+        options.logger,
+      );
+      rejectReady(error);
+      resolveGatewayFailure(error);
     },
     onBuildError(error) {
       const message = reportError(options.logger, 'build failed', error);
@@ -243,11 +279,22 @@ export default async function runDevguard(
       return initialStatus;
     }
 
-    await new Promise<void>((resolveSignal) => {
+    let removeSignalListeners = (): void => undefined;
+    const terminationSignal = new Promise<void>((resolveSignal) => {
       const finish = (): void => resolveSignal();
       process.once('SIGINT', finish);
       process.once('SIGTERM', finish);
+      removeSignalListeners = () => {
+        process.removeListener('SIGINT', finish);
+        process.removeListener('SIGTERM', finish);
+      };
     });
+    const gatewayError = await Promise.race([
+      terminationSignal.then(() => undefined),
+      gatewayFailure,
+    ]);
+    removeSignalListeners();
+    if (gatewayError) throw gatewayError;
     await shutdown();
     return gatewayStatus ?? initialStatus;
   } catch (error) {

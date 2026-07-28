@@ -16,12 +16,21 @@ export interface DevRunnerOptions {
   onBuildStarted?: () => void;
   onBuildSucceeded?: () => void;
   onGatewayStarted?: (child: ChildProcess) => void;
+  /** Reports an unexpected active Gateway error or exit, excluding replacement and shutdown. */
+  onGatewayExit?: (exit: GatewayExit) => void;
   onBuildError?: (error: unknown) => void;
 }
 
-interface ChildExit {
+export interface GatewayExit {
   code: number | null;
   signal: NodeJS.Signals | null;
+  error?: unknown;
+}
+
+type ChildExit = Omit<GatewayExit, 'error'>;
+
+interface GatewayMonitor {
+  expectExit(): void;
 }
 
 interface ActiveBuild {
@@ -69,10 +78,42 @@ function stopChild(child: ChildProcess | undefined, timeoutMs: number): Promise<
   });
 }
 
+function monitorGateway(
+  child: ChildProcess,
+  onUnexpectedExit: (exit: GatewayExit) => void,
+): GatewayMonitor {
+  let expected = false;
+  let settled = false;
+
+  const finish = (exit: GatewayExit): void => {
+    if (settled) return;
+    settled = true;
+    child.removeListener('error', handleError);
+    child.removeListener('exit', handleExit);
+    if (!expected) onUnexpectedExit(exit);
+  };
+  const handleError = (error: unknown): void => {
+    finish({ code: child.exitCode, signal: child.signalCode, error });
+  };
+  const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+    finish({ code, signal });
+  };
+
+  child.once('error', handleError);
+  child.once('exit', handleExit);
+
+  return {
+    expectExit() {
+      expected = true;
+    },
+  };
+}
+
 export default function createDevRunner(options: DevRunnerOptions): DevRunner {
   const debounceMs = options.debounceMs ?? 150;
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? 5_000;
   let gateway: ChildProcess | undefined;
+  let gatewayMonitor: GatewayMonitor | undefined;
   let activeBuild: ActiveBuild | undefined;
   let running: Promise<void> | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -89,6 +130,18 @@ export default function createDevRunner(options: DevRunnerOptions): DevRunner {
       current.resolveCancelled();
     });
     return current.stopping;
+  };
+
+  const stopGateway = async (): Promise<void> => {
+    const current = gateway;
+    if (!current) return;
+
+    gatewayMonitor?.expectExit();
+    await stopChild(current, shutdownTimeoutMs);
+    if (gateway === current) {
+      gateway = undefined;
+      gatewayMonitor = undefined;
+    }
   };
 
   const executeBuild = async (): Promise<void> => {
@@ -125,12 +178,19 @@ export default function createDevRunner(options: DevRunnerOptions): DevRunner {
       }
       options.onBuildSucceeded?.();
 
-      const previousGateway = gateway;
-      await stopChild(previousGateway, shutdownTimeoutMs);
-      if (gateway === previousGateway) gateway = undefined;
+      await stopGateway();
       if (!stopped && !current.cancelled) {
-        gateway = options.startGateway();
-        options.onGatewayStarted?.(gateway);
+        const nextGateway = options.startGateway();
+        gateway = nextGateway;
+        gatewayMonitor = monitorGateway(nextGateway, (exit) => {
+          if (gateway !== nextGateway) return;
+          if (exit.error === undefined) {
+            gateway = undefined;
+            gatewayMonitor = undefined;
+          }
+          if (!stopped) options.onGatewayExit?.(exit);
+        });
+        options.onGatewayStarted?.(nextGateway);
       }
     } catch (error) {
       if (!current.cancelled && !stopped) options.onBuildError?.(error);
@@ -173,8 +233,7 @@ export default function createDevRunner(options: DevRunnerOptions): DevRunner {
       if (timer) clearTimeout(timer);
       await cancelBuild();
       await running;
-      await stopChild(gateway, shutdownTimeoutMs);
-      gateway = undefined;
+      await stopGateway();
     },
   };
 }

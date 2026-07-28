@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 
-import createDevRunner from '../lib/dev-runner.ts';
+import createDevRunner, { type GatewayExit } from '../lib/dev-runner.ts';
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -52,6 +52,7 @@ describe('lib/dev-runner', () => {
     const secondGatewayStarted = deferred<FakeChild>();
     let builds = 0;
     let gateways = 0;
+    const gatewayExits: GatewayExit[] = [];
     const runner = createDevRunner({
       debounceMs: 0,
       startBuild: () => {
@@ -66,6 +67,7 @@ describe('lib/dev-runner', () => {
         (gateways === 1 ? firstGatewayStarted : secondGatewayStarted).resolve(child);
         return asChildProcess(child);
       },
+      onGatewayExit: (exit) => gatewayExits.push(exit),
     });
 
     runner.requestBuild();
@@ -84,6 +86,7 @@ describe('lib/dev-runner', () => {
     assert.equal(gateways, 2);
     assert.deepEqual(firstGateway.killSignals, ['SIGTERM']);
     await runner.stop();
+    assert.deepEqual(gatewayExits, []);
   });
 
   it('should keep the current Gateway alive when a build fails', async () => {
@@ -207,5 +210,67 @@ describe('lib/dev-runner', () => {
     await runner.stop();
 
     assert.deepEqual(gateway.killSignals, ['SIGTERM', 'SIGKILL']);
+  });
+
+  it('should report an unexpected Gateway exit once', async () => {
+    const buildStarted = deferred<FakeChild>();
+    const gatewayStarted = deferred<FakeChild>();
+    const gatewayExits: GatewayExit[] = [];
+    const runner = createDevRunner({
+      debounceMs: 0,
+      startBuild: () => {
+        const child = new FakeChild();
+        buildStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      startGateway: () => {
+        const child = new FakeChild();
+        gatewayStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      onGatewayExit: (exit) => gatewayExits.push(exit),
+    });
+
+    runner.requestBuild();
+    const build = await buildStarted.promise;
+    build.finish(0);
+    const gateway = await gatewayStarted.promise;
+    gateway.finish(17);
+    gateway.finish(18);
+
+    assert.deepEqual(gatewayExits, [{ code: 17, signal: null }]);
+    await runner.stop();
+    assert.deepEqual(gateway.killSignals, []);
+  });
+
+  it('should report an unexpected Gateway process error', async () => {
+    const buildStarted = deferred<FakeChild>();
+    const gatewayStarted = deferred<FakeChild>();
+    const gatewayExited = deferred<GatewayExit>();
+    const runner = createDevRunner({
+      debounceMs: 0,
+      startBuild: () => {
+        const child = new FakeChild();
+        buildStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      startGateway: () => {
+        const child = new FakeChild();
+        gatewayStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      onGatewayExit: (exit) => gatewayExited.resolve(exit),
+    });
+
+    runner.requestBuild();
+    const build = await buildStarted.promise;
+    build.finish(0);
+    const gateway = await gatewayStarted.promise;
+    const error = new Error('spawn failure');
+    gateway.emit('error', error);
+
+    assert.deepEqual(await gatewayExited.promise, { code: null, signal: null, error });
+    await runner.stop();
+    assert.deepEqual(gateway.killSignals, ['SIGTERM']);
   });
 });
