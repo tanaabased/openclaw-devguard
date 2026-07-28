@@ -60,7 +60,10 @@ describe('lib/register-cli', () => {
       new Set(findCommand(devguard, 'run').options),
       new Set(['--unsafe-raw-stream', '--once']),
     );
-    assert.deepEqual(new Set(findCommand(devguard, 'tail').options), new Set(['--json']));
+    assert.deepEqual(
+      new Set(findCommand(devguard, 'tail').options),
+      new Set(['--json', '--no-follow']),
+    );
   });
 
   it('should expose handlers for every implemented command', () => {

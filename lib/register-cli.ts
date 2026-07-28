@@ -77,10 +77,12 @@ export default function registerDevguardCli(
     .command('tail')
     .description('Tail DevGuard events.')
     .option('--json', 'Emit newline-delimited JSON events.')
+    .option('--no-follow', 'Read current events and exit.')
     .action(async (commandOptions: unknown) => {
-      const flags = (commandOptions ?? {}) as { json?: boolean };
+      const flags = (commandOptions ?? {}) as { follow?: boolean; json?: boolean };
       await runCliAction(options.logger, 'tail failed', async () => {
         await tailDevguard(process.cwd(), {
+          follow: flags.follow,
           json: flags.json,
           logger: options.logger,
           output,
