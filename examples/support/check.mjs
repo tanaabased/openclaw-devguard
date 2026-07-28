@@ -68,8 +68,18 @@ async function assertDenyLog(path) {
   if (blocked.some(({ decision }) => decision !== 'blocked')) {
     throw new Error('deny log contained a non-blocking terminal decision');
   }
-  if (contents.includes('leia-sensitive-value') || !contents.includes('[REDACTED]')) {
-    throw new Error('deny log did not redact the seeded tool environment secret');
+  if (contents.includes('leia-sensitive-value')) {
+    throw new Error('deny log exposed the seeded tool environment secret');
+  }
+  if (
+    attempted.some(
+      ({ environment }) =>
+        !environment?.toolArguments?.some(
+          ({ name, redacted }) => name === 'DEVGUARD_TEST_SECRET' && redacted === true,
+        ),
+    )
+  ) {
+    throw new Error('deny log did not mark the seeded tool environment secret as redacted');
   }
   if (
     attempted.some(
