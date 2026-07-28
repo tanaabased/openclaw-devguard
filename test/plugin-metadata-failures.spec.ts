@@ -6,7 +6,7 @@ import pluginMetadataFailures, {
 } from '../utils/plugin-metadata-failures.ts';
 
 const packageMetadata: PackageMetadata = {
-  name: '@tanaabased/openclaw-devguard',
+  name: '@tanaab/openclaw-devguard',
   version: 'test-version',
   openclaw: {
     extensions: ['./index.ts'],

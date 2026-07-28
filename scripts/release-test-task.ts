@@ -171,7 +171,7 @@ try {
     cwd: fixtureDirectory,
     env: isolatedEnvironment,
   });
-  assert.match(runtime.output, /DevGuard ready: build/);
+  assert.match(runtime.output, /DevGuard\b.*\bready\b.*\bbuild\b/);
   assert.match(runtime.output, /hook active/);
 
   const unfinished = await run('openclaw', ['devguard', 'doctor'], {

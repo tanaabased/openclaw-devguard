@@ -178,7 +178,7 @@ export default async function runDevguard(
             `Gateway verified for ${config.plugin.id} (${status.pluginBuildId ?? 'unknown'})`,
           );
           output.writeStdout(
-            `DevGuard is ready: build ${status.pluginBuildId ?? 'unknown'}, hook active, log ${status.logPath ?? paths.logPath}\n`,
+            `DevGuard ready: build ${status.pluginBuildId ?? 'unknown'}, hook active, log ${status.logPath ?? paths.logPath}\n`,
           );
           resolveReady(status);
         },

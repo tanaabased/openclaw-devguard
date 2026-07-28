@@ -49,7 +49,7 @@ export default function pluginMetadataFailures(
   };
 
   check(
-    packageMetadata.name === '@tanaabased/openclaw-devguard',
+    packageMetadata.name === '@tanaab/openclaw-devguard',
     'package-name',
     'unexpected npm package name',
   );

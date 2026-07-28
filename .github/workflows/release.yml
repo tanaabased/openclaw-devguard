@@ -47,7 +47,7 @@ jobs:
         with:
           commands: |
             version-injector openclaw.plugin.json --style json --version "${{ github.event.release.tag_name }}"
-            bun run build
+            bun run format:write
           sync-token: ${{ secrets.TANAAB_COAXIUM_INJECTOR }}
           sync-email: tanaabot@tanaab.dev
           sync-username: tanaabot
@@ -59,6 +59,10 @@ jobs:
             UNRELEASED_DATE=${{ env.RELEASE_DATE }}
             UNRELEASED_LINK=${{ github.event.release.html_url }}
             UNRELEASED_VERSION=${{ github.event.release.tag_name }}
+      - name: Validate prepared package
+        run: |
+          bun run build
+          bun run format:check
       - name: Run packed-plugin smoke tests
         run: bun run release:test
       - name: Upgrade npm for trusted publishing
