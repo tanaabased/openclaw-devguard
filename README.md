@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-linter.yml"><img src="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-linter.yml/badge.svg" alt="Lint" /></a>
   <a href="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-unit-tests.yml"><img src="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-unit-tests.yml/badge.svg" alt="Unit tests" /></a>
+  <a href="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-examples-tests.yml"><img src="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-examples-tests.yml/badge.svg" alt="Example tests" /></a>
 </p>
 
 OpenClaw DevGuard is a third-party development plugin that builds another OpenClaw plugin in an isolated profile, supervises its Gateway, and blocks and audits agent tool calls.
@@ -84,7 +85,7 @@ bun run lint
 bun run test
 ```
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for the repository layout, complete validation suite, live development loops, dogfooding, and release testing.
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for the repository layout, complete validation suite, live development loops, dogfooding, package validation, and CI-first operational scenarios.
 
 ## Issues, Questions and Support
 

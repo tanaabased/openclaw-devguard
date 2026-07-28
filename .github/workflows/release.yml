@@ -63,7 +63,7 @@ jobs:
         run: |
           bun run build
           bun run format:check
-      - name: Run packed-plugin smoke tests
+      - name: Validate packed plugin package
         run: bun run release:test
       - name: Upgrade npm for trusted publishing
         run: npm install --global "npm@^11.5.1"

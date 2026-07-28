@@ -36,5 +36,5 @@ jobs:
           version: ${{ env.STAMPED_VERSION }}
           commands: |
             version-injector openclaw.plugin.json --style json --version "${{ env.STAMPED_VERSION }}"
-      - name: Run release tests
+      - name: Run release package tests
         run: bun run release:test

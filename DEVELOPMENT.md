@@ -68,15 +68,19 @@ OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 
 This makes DevGuard both the guard and the target. Developing another plugin follows the per-target flow in [OPENCLAW.md](./OPENCLAW.md#development-model).
 
-## Operational Validation
+## Package Validation
 
 ```sh
 bun run release:test
 ```
 
-The release test packs the npm artifact, installs it into disposable OpenClaw state, initializes an external fixture twice, verifies state reuse, starts an isolated Gateway, confirms the live build and hook, checks unfinished-command failure, and removes the fixture. It does not exercise a model-driven tool call or a watch-triggered rebuild.
+The release package test builds the plugin, validates its metadata, creates an npm archive, and confirms that the required runtime, manifest, source, CLI, and library files are present.
 
-Do not run `release:test`, direct OpenClaw commands, plugin installation, Gateway startup, or future Leia scenarios as routine local validation. Run them only when the task explicitly calls for operational testing; keep machine-mutating scenarios CI-first.
+## Operational Scenarios
+
+The CI-first Leia scenarios under [`examples/`](./examples/) install the packed plugin, initialize a linked fixture, and complete one bounded `run --once` cycle on fresh macOS and Ubuntu runners.
+
+Do not run direct OpenClaw commands, plugin installation, Gateway startup, or Leia scenarios as routine local validation. Run them only when the task explicitly calls for operational testing; keep machine-mutating scenarios CI-first.
 
 ## Release Model
 

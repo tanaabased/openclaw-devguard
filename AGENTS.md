@@ -39,7 +39,8 @@
 
 - Run `bun run lint`, `bun run typecheck`, `bun run test`, `bun run build`, and `bun run plugin:check` for implementation changes.
 - Run `bun run test:integration` only when filesystem-watcher behavior is directly in scope.
-- Do not run `bun run release:test`, direct `openclaw` commands, plugin installation, or Gateway startup unless the user explicitly requests operational validation.
+- Run `bun run release:test` when package contents or release wiring are directly in scope.
+- Do not run direct `openclaw` commands, plugin installation, or Gateway startup unless the user explicitly requests operational validation.
 - Do not run Leia scenarios or other operational tests from `examples/` locally unless the user explicitly requests them; prefer CI for those scenarios.
 - When operational validation is explicitly requested, use isolated OpenClaw state.
 - Do not claim enforcement behavior until it exists and has focused tests.
