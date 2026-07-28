@@ -8,7 +8,14 @@ import {
   type DevguardProjectConfig,
 } from '../lib/project-config.ts';
 import processCommand from '../lib/process-command.ts';
-import { defaultCliOutput, type CliOutput } from '../lib/cli-output.ts';
+import {
+  defaultCliOutput,
+  formatCliAction,
+  formatCliField,
+  formatCliTarget,
+  type CliOutput,
+  writeCliLines,
+} from '../lib/cli-output.ts';
 import { logDebug, logInfo, type Logger } from '../lib/logger.ts';
 
 export interface InitDevguardOptions {
@@ -179,15 +186,13 @@ export default async function initDevguard(
     snapshotPath,
   };
   const output = options.output ?? defaultCliOutput;
-  output.writeStdout(
-    [
-      `DevGuard initialized for ${result.config.plugin.id}.`,
-      `Project: ${result.pluginRoot}`,
-      `Isolated state: ${result.stateDirectory}`,
-      `Tool-call log: ${result.logPath}`,
-      `Configuration: ${result.configCreated ? 'created' : 'reused'}`,
-      'Next: openclaw devguard run',
-    ].join('\n') + '\n',
-  );
+  writeCliLines(output, [
+    formatCliAction('initialized', result.config.plugin.id),
+    formatCliTarget('project', result.pluginRoot),
+    formatCliTarget('state', result.stateDirectory),
+    formatCliTarget('log', result.logPath),
+    formatCliField('config', result.configCreated ? 'created' : 'reused'),
+    formatCliTarget('next', 'openclaw devguard run'),
+  ]);
   return result;
 }

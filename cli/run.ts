@@ -5,7 +5,14 @@ import { dirname, join, resolve } from 'node:path';
 import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
 import createDevRunner, { type GatewayExit } from '../lib/dev-runner.ts';
-import { defaultCliOutput, type CliOutput } from '../lib/cli-output.ts';
+import {
+  defaultCliOutput,
+  formatCliField,
+  formatCliStatus,
+  formatCliTarget,
+  type CliOutput,
+  writeCliLines,
+} from '../lib/cli-output.ts';
 import waitForGatewayStatus, { type GatewayStatus } from '../lib/gateway-status.ts';
 import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
 import createProjectWatcher from '../lib/project-watcher.ts';
@@ -194,9 +201,12 @@ export default async function runDevguard(
             options.logger,
             `Gateway verified for ${config.plugin.id} (${status.pluginBuildId ?? 'unknown'})`,
           );
-          output.writeStdout(
-            `DevGuard ready: build ${status.pluginBuildId ?? 'unknown'}, hook active, log ${status.logPath ?? paths.logPath}\n`,
-          );
+          writeCliLines(output, [
+            formatCliStatus('ready', config.plugin.id),
+            formatCliTarget('build', status.pluginBuildId ?? 'unknown'),
+            formatCliField('hook', 'active'),
+            formatCliTarget('log', status.logPath ?? paths.logPath),
+          ]);
           resolveReady(status);
         },
         (error) => {
