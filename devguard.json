@@ -6,6 +6,10 @@
       "command": "bun",
       "args": ["run", "build"]
     },
+    "validate": {
+      "command": "bun",
+      "args": ["run", "plugin:check"]
+    },
     "watch": [
       "cli",
       "lib",

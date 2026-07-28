@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
@@ -21,6 +22,7 @@ import {
   readProjectConfig,
   resolveProjectPaths,
 } from '../lib/project-config.ts';
+import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 
 export interface RunDevguardOptions {
   environment?: NodeJS.ProcessEnv;
@@ -29,21 +31,6 @@ export interface RunDevguardOptions {
   output?: CliOutput;
   unsafeRawStream?: boolean;
   startupTimeoutMs?: number;
-}
-
-async function appendRuntimeEvent(logPath: string, event: Record<string, unknown>): Promise<void> {
-  await mkdir(dirname(logPath), { recursive: true });
-  await appendFile(
-    logPath,
-    `${JSON.stringify({ timestamp: new Date().toISOString(), ...event })}\n`,
-    'utf8',
-  );
-}
-
-function recordRuntimeEvent(logPath: string, event: Record<string, unknown>, logger: Logger): void {
-  void appendRuntimeEvent(logPath, event).catch((error: unknown) => {
-    reportError(logger, 'could not append a lifecycle event', error);
-  });
 }
 
 function unexpectedGatewayExit(exit: GatewayExit): Error {
@@ -76,6 +63,12 @@ export default async function runDevguard(
   const environment = options.environment ?? process.env;
   const output = options.output ?? defaultCliOutput;
   const paths = resolveProjectPaths(root, config.plugin.id, environment);
+  const runId = randomUUID();
+  const events = createRuntimeEventRecorder({
+    base: { pluginId: config.plugin.id, runId },
+    logPath: paths.logPath,
+    onError: (error) => reportError(options.logger, 'could not append a lifecycle event', error),
+  });
   try {
     await readFile(join(paths.projectStateRoot, 'init.json'), 'utf8');
   } catch (error) {
@@ -116,6 +109,7 @@ export default async function runDevguard(
     DEVGUARD_LOG_PATH: paths.logPath,
     DEVGUARD_ENV_PREVIEW_ALLOWLIST: config.logging.environmentValueAllowlist.join(','),
   });
+  const validation = config.plugin.validate;
 
   const runner = createDevRunner({
     startBuild: () =>
@@ -124,6 +118,14 @@ export default async function runDevguard(
         env: environment,
         stdio: 'inherit',
       }),
+    startValidation: validation
+      ? () =>
+          spawn(validation.command, validation.args, {
+            cwd: root,
+            env: environment,
+            stdio: 'inherit',
+          })
+      : undefined,
     startGateway: () => {
       const args = ['gateway', 'run', '--port', String(config.gateway.port)];
       if (options.unsafeRawStream) {
@@ -141,29 +143,34 @@ export default async function runDevguard(
     },
     onBuildStarted() {
       logDebug(options.logger, `build started for ${config.plugin.id}`);
-      recordRuntimeEvent(
-        paths.logPath,
-        {
-          event: 'build_started',
-          pluginId: config.plugin.id,
-        },
-        options.logger,
-      );
+      events.record({ event: 'build_started' });
     },
     onBuildSucceeded() {
       activeGatewayBuildId = undefined;
       buildSequence += 1;
       buildId = `${new Date().toISOString()}#${buildSequence}`;
       logInfo(options.logger, `build succeeded for ${config.plugin.id} (${buildId})`);
-      recordRuntimeEvent(
-        paths.logPath,
-        {
-          event: 'build_succeeded',
-          pluginId: config.plugin.id,
-          pluginBuildId: buildId,
-        },
-        options.logger,
-      );
+      events.record({ event: 'build_succeeded', pluginBuildId: buildId });
+    },
+    onValidationStarted() {
+      logDebug(options.logger, `validation started for ${config.plugin.id}`);
+      events.record({ event: 'plugin_validation_started' });
+    },
+    onValidationSucceeded() {
+      logInfo(options.logger, `validation succeeded for ${config.plugin.id}`);
+      events.record({ event: 'plugin_validation_succeeded' });
+    },
+    onValidationError(error) {
+      const message = reportError(options.logger, 'plugin validation failed', error);
+      events.record({ event: 'plugin_validation_failed', error: message });
+      rejectReady(error);
+    },
+    onGatewayRestartRequested() {
+      events.record({
+        event: 'gateway_restart_requested',
+        pluginBuildId: buildId,
+        previousPluginBuildId: gatewayStatus?.pluginBuildId,
+      });
     },
     onGatewayStarted(child: ChildProcess) {
       const expectedBuildId = buildId;
@@ -172,16 +179,11 @@ export default async function runDevguard(
         options.logger,
         `Gateway process started for ${config.plugin.id} (pid ${child.pid ?? 'unknown'})`,
       );
-      recordRuntimeEvent(
-        paths.logPath,
-        {
-          event: 'gateway_started',
-          pluginId: config.plugin.id,
-          pluginBuildId: expectedBuildId,
-          gatewayProcessId: child.pid,
-        },
-        options.logger,
-      );
+      events.record({
+        event: 'gateway_started',
+        pluginBuildId: expectedBuildId,
+        gatewayProcessId: child.pid,
+      });
       void waitForGatewayStatus({
         expectedBuildId,
         isCurrent: () => activeGatewayBuildId === expectedBuildId,
@@ -201,6 +203,11 @@ export default async function runDevguard(
             options.logger,
             `Gateway verified for ${config.plugin.id} (${status.pluginBuildId ?? 'unknown'})`,
           );
+          events.record({
+            event: 'target_plugin_loaded',
+            pluginBuildId: status.pluginBuildId,
+            gatewayProcessId: status.gatewayProcessId,
+          });
           writeCliLines(output, [
             formatCliStatus('ready', config.plugin.id),
             formatCliTarget('build', status.pluginBuildId ?? 'unknown'),
@@ -211,50 +218,44 @@ export default async function runDevguard(
         },
         (error) => {
           if (activeGatewayBuildId !== expectedBuildId) return;
-          recordRuntimeEvent(
-            paths.logPath,
-            {
-              event: 'gateway_start_failed',
-              pluginId: config.plugin.id,
-              pluginBuildId: expectedBuildId,
-              error: reportError(options.logger, 'Gateway startup failed', error),
-            },
-            options.logger,
-          );
+          const message = reportError(options.logger, 'Gateway startup failed', error);
+          events.record({
+            event: 'target_plugin_load_failed',
+            pluginBuildId: expectedBuildId,
+            error: message,
+          });
+          events.record({
+            event: 'gateway_start_failed',
+            pluginBuildId: expectedBuildId,
+            error: message,
+          });
           rejectReady(error);
         },
       );
+    },
+    onGatewayStartError(error) {
+      const message = reportError(options.logger, 'Gateway startup failed', error);
+      events.record({ event: 'gateway_start_failed', pluginBuildId: buildId, error: message });
+      rejectReady(error);
+      resolveGatewayFailure(error instanceof Error ? error : new Error(String(error)));
     },
     onGatewayExit(exit) {
       activeGatewayBuildId = undefined;
       const error = unexpectedGatewayExit(exit);
       const message = reportError(options.logger, 'Gateway exited', error);
-      recordRuntimeEvent(
-        paths.logPath,
-        {
-          event: 'gateway_exited',
-          pluginId: config.plugin.id,
-          pluginBuildId: buildId,
-          exitCode: exit.code,
-          exitSignal: exit.signal,
-          error: message,
-        },
-        options.logger,
-      );
+      events.record({
+        event: 'gateway_exited',
+        pluginBuildId: buildId,
+        exitCode: exit.code,
+        exitSignal: exit.signal,
+        error: message,
+      });
       rejectReady(error);
       resolveGatewayFailure(error);
     },
     onBuildError(error) {
       const message = reportError(options.logger, 'build failed', error);
-      recordRuntimeEvent(
-        paths.logPath,
-        {
-          event: 'build_failed',
-          pluginId: config.plugin.id,
-          error: message,
-        },
-        options.logger,
-      );
+      events.record({ event: 'build_failed', error: message });
       rejectReady(error);
     },
   });
@@ -279,6 +280,7 @@ export default async function runDevguard(
     logDebug(options.logger, `stopping supervision for ${config.plugin.id}`);
     await watcher.close();
     await runner.stop();
+    await events.flush();
   };
   runner.requestBuild();
 

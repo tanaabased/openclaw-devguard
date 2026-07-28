@@ -13,6 +13,10 @@ export interface DevguardProjectConfig {
       command: string;
       args: string[];
     };
+    validate?: {
+      command: string;
+      args: string[];
+    };
     watch: string[];
   };
   logging: {
@@ -57,21 +61,31 @@ function stringArray(value: unknown, path: string): string[] {
   return value;
 }
 
+function commandConfig(value: unknown, path: string): DevguardProjectConfig['plugin']['build'] {
+  const command = record(value, path);
+  assertExactKeys(command, ['command', 'args'], path);
+  if (typeof command.command !== 'string' || command.command.length === 0) {
+    throw new TypeError(`${path}.command must be a non-empty string`);
+  }
+  return {
+    command: command.command,
+    args: stringArray(command.args, `${path}.args`),
+  };
+}
+
 export function parseProjectConfig(value: unknown): DevguardProjectConfig {
   const config = record(value, DEVGUARD_PROJECT_FILE);
   assertExactKeys(config, ['version', 'plugin', 'logging', 'gateway'], DEVGUARD_PROJECT_FILE);
   if (config.version !== 1) throw new Error(`${DEVGUARD_PROJECT_FILE} version must be 1`);
 
   const plugin = record(config.plugin, 'plugin');
-  assertExactKeys(plugin, ['id', 'build', 'watch'], 'plugin');
+  assertExactKeys(plugin, ['id', 'build', 'validate', 'watch'], 'plugin');
   if (typeof plugin.id !== 'string' || plugin.id.length === 0) {
     throw new TypeError('plugin.id must be a non-empty string');
   }
-  const build = record(plugin.build, 'plugin.build');
-  assertExactKeys(build, ['command', 'args'], 'plugin.build');
-  if (typeof build.command !== 'string' || build.command.length === 0) {
-    throw new TypeError('plugin.build.command must be a non-empty string');
-  }
+  const build = commandConfig(plugin.build, 'plugin.build');
+  const validate =
+    plugin.validate === undefined ? undefined : commandConfig(plugin.validate, 'plugin.validate');
 
   const logging = record(config.logging, 'logging');
   assertExactKeys(logging, ['environmentValueAllowlist'], 'logging');
@@ -90,10 +104,8 @@ export function parseProjectConfig(value: unknown): DevguardProjectConfig {
     version: 1,
     plugin: {
       id: plugin.id,
-      build: {
-        command: build.command,
-        args: stringArray(build.args, 'plugin.build.args'),
-      },
+      build,
+      ...(validate ? { validate } : {}),
       watch: stringArray(plugin.watch, 'plugin.watch'),
     },
     logging: {
@@ -121,6 +133,20 @@ function inferBuild(packageMetadata: PackageMetadata): DevguardProjectConfig['pl
   if (!scriptName) {
     throw new Error('plugin package.json must define a build or plugin:build script');
   }
+
+  const packageManager = packageMetadata.packageManager?.split('@')[0] ?? 'npm';
+  const command = ['bun', 'npm', 'pnpm', 'yarn'].includes(packageManager) ? packageManager : 'npm';
+  return { command, args: ['run', scriptName] };
+}
+
+function inferValidation(
+  packageMetadata: PackageMetadata,
+): DevguardProjectConfig['plugin']['validate'] {
+  const scripts = packageMetadata.scripts ?? {};
+  const scriptName = ['plugin:check', 'plugin:validate', 'validate'].find(
+    (candidate) => scripts[candidate],
+  );
+  if (!scriptName) return undefined;
 
   const packageManager = packageMetadata.packageManager?.split('@')[0] ?? 'npm';
   const command = ['bun', 'npm', 'pnpm', 'yarn'].includes(packageManager) ? packageManager : 'npm';
@@ -158,12 +184,14 @@ export async function createProjectConfig(pluginRoot: string): Promise<DevguardP
   if (typeof manifest.id !== 'string' || manifest.id.length === 0) {
     throw new Error('openclaw.plugin.json must declare a non-empty plugin id');
   }
+  const validate = inferValidation(packageMetadata);
 
   return {
     version: 1,
     plugin: {
       id: manifest.id,
       build: inferBuild(packageMetadata),
+      ...(validate ? { validate } : {}),
       watch: await inferWatchPaths(pluginRoot),
     },
     logging: { environmentValueAllowlist: [] },

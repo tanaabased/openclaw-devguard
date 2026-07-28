@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 
 export type StartBuild = () => ChildProcess;
 export type StartGateway = () => ChildProcess;
+export type StartValidation = () => ChildProcess;
 
 export interface DevRunner {
   requestBuild(): void;
@@ -11,14 +12,20 @@ export interface DevRunner {
 export interface DevRunnerOptions {
   startBuild: StartBuild;
   startGateway: StartGateway;
+  startValidation?: StartValidation;
   debounceMs?: number;
   shutdownTimeoutMs?: number;
   onBuildStarted?: () => void;
   onBuildSucceeded?: () => void;
   onGatewayStarted?: (child: ChildProcess) => void;
+  onGatewayRestartRequested?: () => void;
+  onGatewayStartError?: (error: unknown) => void;
   /** Reports an unexpected active Gateway error or exit, excluding replacement and shutdown. */
   onGatewayExit?: (exit: GatewayExit) => void;
   onBuildError?: (error: unknown) => void;
+  onValidationStarted?: () => void;
+  onValidationSucceeded?: () => void;
+  onValidationError?: (error: unknown) => void;
 }
 
 export interface GatewayExit {
@@ -39,6 +46,23 @@ interface ActiveBuild {
   cancelledPromise: Promise<void>;
   resolveCancelled: () => void;
   stopping?: Promise<void>;
+}
+
+async function waitForSuccessfulProcess(
+  active: ActiveBuild,
+  child: ChildProcess,
+  label: string,
+): Promise<boolean> {
+  const outcome = await Promise.race([
+    waitForExit(child).then((exit) => ({ exit })),
+    active.cancelledPromise.then(() => ({ cancelled: true as const })),
+  ]);
+  if ('cancelled' in outcome || active.cancelled) return false;
+  if (outcome.exit.code !== 0) {
+    const reason = outcome.exit.signal ?? outcome.exit.code ?? 1;
+    throw new Error(`${label} failed with exit ${String(reason)}`);
+  }
+  return true;
 }
 
 function waitForExit(child: ChildProcess): Promise<ChildExit> {
@@ -167,20 +191,36 @@ export default function createDevRunner(options: DevRunnerOptions): DevRunner {
     activeBuild = current;
 
     try {
-      const outcome = await Promise.race([
-        waitForExit(child).then((exit) => ({ exit })),
-        current.cancelledPromise.then(() => ({ cancelled: true as const })),
-      ]);
-      if ('cancelled' in outcome || current.cancelled || stopped) return;
-      if (outcome.exit.code !== 0) {
-        const reason = outcome.exit.signal ?? outcome.exit.code ?? 1;
-        throw new Error(`build failed with exit ${String(reason)}`);
+      if (!(await waitForSuccessfulProcess(current, child, 'build')) || stopped) return;
+
+      if (options.startValidation) {
+        options.onValidationStarted?.();
+        if (current.cancelled || stopped) return;
+        try {
+          const validation = options.startValidation();
+          current.child = validation;
+          if (!(await waitForSuccessfulProcess(current, validation, 'validation')) || stopped) {
+            return;
+          }
+          options.onValidationSucceeded?.();
+        } catch (error) {
+          if (!current.cancelled && !stopped) options.onValidationError?.(error);
+          return;
+        }
       }
       options.onBuildSucceeded?.();
+      if (current.cancelled || stopped) return;
 
+      if (gateway) options.onGatewayRestartRequested?.();
       await stopGateway();
       if (!stopped && !current.cancelled) {
-        const nextGateway = options.startGateway();
+        let nextGateway: ChildProcess;
+        try {
+          nextGateway = options.startGateway();
+        } catch (error) {
+          options.onGatewayStartError?.(error);
+          return;
+        }
         gateway = nextGateway;
         gatewayMonitor = monitorGateway(nextGateway, (exit) => {
           if (gateway !== nextGateway) return;

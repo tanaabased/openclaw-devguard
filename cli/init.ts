@@ -147,6 +147,14 @@ export default async function initDevguard(
     env: environment,
     inherit: true,
   });
+  if (config.plugin.validate) {
+    logDebug(options.logger, `validating plugin ${config.plugin.id}`);
+    await processCommand(config.plugin.validate.command, config.plugin.validate.args, {
+      cwd: pluginRoot,
+      env: environment,
+      inherit: true,
+    });
+  }
 
   const isolatedEnvironment = {
     ...environment,

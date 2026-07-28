@@ -52,6 +52,7 @@ describe('lib/dev-runner', () => {
     const secondGatewayStarted = deferred<FakeChild>();
     let builds = 0;
     let gateways = 0;
+    let restartRequests = 0;
     const gatewayExits: GatewayExit[] = [];
     const runner = createDevRunner({
       debounceMs: 0,
@@ -68,6 +69,9 @@ describe('lib/dev-runner', () => {
         return asChildProcess(child);
       },
       onGatewayExit: (exit) => gatewayExits.push(exit),
+      onGatewayRestartRequested: () => {
+        restartRequests += 1;
+      },
     });
 
     runner.requestBuild();
@@ -84,6 +88,7 @@ describe('lib/dev-runner', () => {
 
     assert.equal(builds, 2);
     assert.equal(gateways, 2);
+    assert.equal(restartRequests, 1);
     assert.deepEqual(firstGateway.killSignals, ['SIGTERM']);
     await runner.stop();
     assert.deepEqual(gatewayExits, []);
@@ -122,6 +127,98 @@ describe('lib/dev-runner', () => {
     const error = await buildFailed.promise;
 
     assert.match(String(error), /build failed with exit 1/);
+    assert.deepEqual(gateway.killSignals, []);
+    await runner.stop();
+  });
+
+  it('should validate a build before starting the Gateway', async () => {
+    const buildStarted = deferred<FakeChild>();
+    const validationStarted = deferred<FakeChild>();
+    const gatewayStarted = deferred<FakeChild>();
+    let buildsSucceeded = 0;
+    const runner = createDevRunner({
+      debounceMs: 0,
+      startBuild: () => {
+        const child = new FakeChild();
+        buildStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      startValidation: () => {
+        const child = new FakeChild();
+        validationStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      startGateway: () => {
+        const child = new FakeChild();
+        gatewayStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      onBuildSucceeded: () => {
+        buildsSucceeded += 1;
+      },
+    });
+
+    runner.requestBuild();
+    const build = await buildStarted.promise;
+    build.finish(0);
+    const validation = await validationStarted.promise;
+    assert.equal(buildsSucceeded, 0);
+    validation.finish(0);
+    await gatewayStarted.promise;
+
+    assert.equal(buildsSucceeded, 1);
+    await runner.stop();
+  });
+
+  it('should keep the current Gateway alive when validation fails', async () => {
+    const firstBuildStarted = deferred<FakeChild>();
+    const secondBuildStarted = deferred<FakeChild>();
+    const firstValidationStarted = deferred<FakeChild>();
+    const secondValidationStarted = deferred<FakeChild>();
+    const gatewayStarted = deferred<FakeChild>();
+    const validationFailed = deferred<unknown>();
+    let builds = 0;
+    let validations = 0;
+    let gateways = 0;
+    const runner = createDevRunner({
+      debounceMs: 0,
+      startBuild: () => {
+        const child = new FakeChild();
+        builds += 1;
+        (builds === 1 ? firstBuildStarted : secondBuildStarted).resolve(child);
+        return asChildProcess(child);
+      },
+      startValidation: () => {
+        const child = new FakeChild();
+        validations += 1;
+        (validations === 1 ? firstValidationStarted : secondValidationStarted).resolve(child);
+        return asChildProcess(child);
+      },
+      startGateway: () => {
+        const child = new FakeChild();
+        gateways += 1;
+        gatewayStarted.resolve(child);
+        return asChildProcess(child);
+      },
+      onValidationError: (error) => validationFailed.resolve(error),
+    });
+
+    runner.requestBuild();
+    const firstBuild = await firstBuildStarted.promise;
+    firstBuild.finish(0);
+    const firstValidation = await firstValidationStarted.promise;
+    firstValidation.finish(0);
+    const gateway = await gatewayStarted.promise;
+
+    runner.requestBuild();
+    const secondBuild = await secondBuildStarted.promise;
+    secondBuild.finish(0);
+    const secondValidation = await secondValidationStarted.promise;
+    secondValidation.finish(1);
+    const error = await validationFailed.promise;
+
+    assert.match(String(error), /validation failed with exit 1/);
+    assert.equal(gateways, 1);
     assert.deepEqual(gateway.killSignals, []);
     await runner.stop();
   });
