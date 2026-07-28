@@ -5,6 +5,7 @@ export type CliOutput = Pick<OutputRuntimeEnv, 'writeStdout'>;
 
 export interface CliStyles {
   action: (value: string) => string;
+  error: (value: string) => string;
   label: (value: string) => string;
   status: (value: string) => string;
   target: (value: string) => string;
@@ -30,6 +31,7 @@ export function createCliStyles(environment: NodeJS.ProcessEnv = process.env): C
 
   return {
     action: (value) => color.tp(value),
+    error: (value) => color.bold(color.red(value)),
     label: (value) => color.dim(value),
     status: (value) => color.bold(color.green(value)),
     target: (value) => color.ts(value),
@@ -48,6 +50,14 @@ export function formatCliAction(
   styles: CliStyles = defaultCliStyles,
 ): string {
   return `${styles.action(formatLabel(action))}${styles.target(target)}`;
+}
+
+export function formatCliError(
+  status: string,
+  target: string,
+  styles: CliStyles = defaultCliStyles,
+): string {
+  return `${styles.error(formatLabel(status))}${styles.target(target)}`;
 }
 
 export function formatCliStatus(

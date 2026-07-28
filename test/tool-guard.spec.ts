@@ -54,6 +54,7 @@ describe('lib/tool-guard', () => {
     ]);
     assert.equal(attempt.environment.finalToolProcessEnvironmentComplete, false);
     assert.equal((writes[0]?.[1] as { event: string }).event, 'tool_call_blocked');
+    assert.equal(guard.status().ambientChannelsDisabled, false);
   });
 
   it('should remain fail-closed when the append-only log cannot be written', async () => {

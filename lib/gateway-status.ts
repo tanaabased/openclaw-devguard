@@ -1,10 +1,13 @@
 export interface GatewayStatus {
+  ambientChannelsDisabled?: boolean;
+  denyUnknownTools?: boolean;
   pluginId?: string;
   pluginBuildId?: string;
   hookRegistered?: boolean;
   policyMode?: string;
   logPath?: string;
   gatewayProcessId?: number;
+  stateDirectory?: string;
 }
 
 export class GatewayStatusTimeoutError extends Error {
@@ -51,6 +54,9 @@ function validateReadyStatus(status: GatewayStatus): void {
   }
   if (status.policyMode !== 'deny') {
     throw new Error('Gateway is not using DevGuard deny mode');
+  }
+  if (status.denyUnknownTools !== true) {
+    throw new Error('Gateway is not denying unknown tools');
   }
 }
 

@@ -1,3 +1,4 @@
+import doctorDevguard from '../cli/doctor.ts';
 import initDevguard from '../cli/init.ts';
 import runDevguard from '../cli/run.ts';
 import tailDevguard from '../cli/tail.ts';
@@ -90,7 +91,14 @@ export default function registerDevguardCli(
   devguard
     .command('doctor')
     .description('Inspect the current DevGuard development environment.')
-    .action(() => notImplemented('doctor'));
+    .action(async () => {
+      await runCliAction(options.logger, 'doctor failed', async () => {
+        await doctorDevguard(process.cwd(), {
+          logger: options.logger,
+          output,
+        });
+      });
+    });
 
   devguard
     .command('restore')

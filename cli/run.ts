@@ -107,6 +107,7 @@ export default async function runDevguard(
     OPENCLAW_DIAGNOSTICS: 'plugin.load-profile',
     DEVGUARD_BUILD_ID: buildId,
     DEVGUARD_LOG_PATH: paths.logPath,
+    DEVGUARD_TARGET_PLUGIN_ID: config.plugin.id,
     DEVGUARD_ENV_PREVIEW_ALLOWLIST: config.logging.environmentValueAllowlist.join(','),
   });
   const validation = config.plugin.validate;

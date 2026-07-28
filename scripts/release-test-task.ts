@@ -58,6 +58,7 @@ try {
     'dist/index.js',
     'dist/index.js.map',
     'index.ts',
+    'cli/doctor.ts',
     'cli/init.ts',
     'cli/run.ts',
     'cli/tail.ts',

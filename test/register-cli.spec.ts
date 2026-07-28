@@ -68,7 +68,7 @@ describe('lib/register-cli', () => {
     registerDevguardCli(program, { logger });
     const devguard = findCommand(program, 'devguard');
 
-    for (const specification of ['doctor', 'restore']) {
+    for (const specification of ['restore']) {
       const command = findCommand(devguard, specification);
       assert.equal(typeof command.handler, 'function');
       assert.throws(

@@ -41,6 +41,7 @@ export interface ToolGuardOptions {
 }
 
 export interface ToolGuardStatus {
+  ambientChannelsDisabled: boolean;
   pluginId: string;
   pluginBuildId: string;
   gatewayProcessId: number;
@@ -50,6 +51,7 @@ export interface ToolGuardStatus {
   hookPriority: number;
   logPath: string;
   environmentValueAllowlist: readonly string[];
+  stateDirectory?: string;
 }
 
 export const TOOL_GUARD_PRIORITY = 1_000_000;
@@ -149,6 +151,7 @@ export default function createToolGuard(options: ToolGuardOptions): {
     },
     status() {
       return {
+        ambientChannelsDisabled: environment.OPENCLAW_SKIP_CHANNELS === '1',
         pluginId: options.pluginId,
         pluginBuildId: options.buildId,
         gatewayProcessId: process.pid,
@@ -158,6 +161,9 @@ export default function createToolGuard(options: ToolGuardOptions): {
         hookPriority: TOOL_GUARD_PRIORITY,
         logPath: options.logPath,
         environmentValueAllowlist,
+        ...(environment.OPENCLAW_STATE_DIR
+          ? { stateDirectory: environment.OPENCLAW_STATE_DIR }
+          : {}),
       };
     },
   };

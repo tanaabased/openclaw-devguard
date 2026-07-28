@@ -20,6 +20,7 @@ function deferred<T>(): Deferred<T> {
 
 function statusResult(pluginBuildId: string): GatewayStatus {
   return {
+    denyUnknownTools: true,
     pluginBuildId,
     hookRegistered: true,
     policyMode: 'deny',
@@ -118,6 +119,18 @@ describe('lib/gateway-status', () => {
         timeoutMs: 1_000,
       }),
       /DevGuard hook/,
+    );
+  });
+
+  it('should reject a matching build that allows unknown tools', async () => {
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        isCurrent: () => true,
+        queryStatus: () => Promise.resolve({ ...statusResult('build-1'), denyUnknownTools: false }),
+        timeoutMs: 1_000,
+      }),
+      /unknown tools/,
     );
   });
 });

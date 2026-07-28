@@ -43,11 +43,12 @@ export default definePluginEntry({
   register(api) {
     const settings = runtimeSettings(api.pluginConfig);
     const buildId = process.env.DEVGUARD_BUILD_ID ?? api.version ?? 'development';
+    const targetPluginId = process.env.DEVGUARD_TARGET_PLUGIN_ID ?? api.id;
     if (api.registrationMode === 'full') {
       logDebug(api.logger, `initializing plugin runtime ${api.id} (${buildId})`);
     }
     const guard = createToolGuard({
-      pluginId: api.id,
+      pluginId: targetPluginId,
       buildId,
       logPath: settings.logPath,
       environmentValueAllowlist: settings.environmentValueAllowlist,
