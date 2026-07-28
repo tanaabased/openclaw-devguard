@@ -36,5 +36,9 @@ jobs:
           version: ${{ env.STAMPED_VERSION }}
           commands: |
             version-injector openclaw.plugin.json --style json --version "${{ env.STAMPED_VERSION }}"
+      - name: Upgrade npm for publish validation
+        run: npm install --global "npm@^11.5.1"
       - name: Run release package tests
         run: bun run release:test
+      - name: Validate npm publish
+        run: npm publish --access public --tag edge --dry-run
