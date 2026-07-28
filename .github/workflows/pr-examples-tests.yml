@@ -29,6 +29,9 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Put Homebrew on PATH
+        shell: bash
+        run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
       - name: Install Homebrew dependencies
         shell: bash
         run: |
