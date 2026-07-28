@@ -26,15 +26,18 @@ Running those commands from the DevGuard repository is the supported dogfooding 
 
 ## Initialize A Target
 
-The target must contain `package.json`, `openclaw.plugin.json`, and a `build` or `plugin:build` package script. `init` then:
+The target must contain `package.json`, `openclaw.plugin.json`, and a `build` or `plugin:build` package script. When present, `plugin:check`, `plugin:validate`, or `validate` becomes the post-build validation command. `init` then:
 
 - creates or validates `devguard.json`
 - creates stable project-specific state under `~/.openclaw-dev/devguard/projects/`
+- snapshots pre-existing isolated configuration once
 - configures a token-authenticated loopback Gateway with channels skipped
 - denies exec and elevated tools and removes sandbox workspace access
-- builds and runtime-inspects the target
+- builds the target
+- runs the inferred validation command
 - installs and enables DevGuard and the linked target in the isolated profile
-- snapshots pre-existing isolated configuration once
+- runtime-inspects the target
+- runs OpenClaw plugin diagnostics
 
 The generated configuration is deliberately strict:
 
@@ -47,6 +50,10 @@ The generated configuration is deliberately strict:
       "command": "bun",
       "args": ["run", "build"]
     },
+    "validate": {
+      "command": "bun",
+      "args": ["run", "plugin:check"]
+    },
     "watch": ["src", "index.ts", "openclaw.plugin.json", "package.json"]
   },
   "logging": {
@@ -58,7 +65,7 @@ The generated configuration is deliberately strict:
 }
 ```
 
-Change `build`, `watch`, or `gateway.port` when the inferred defaults do not fit. Use different ports when supervising multiple targets concurrently. Set `DEVGUARD_HOME` to move the parent directory for project state.
+Change `build`, `validate`, `watch`, or `gateway.port` when the inferred defaults do not fit. The schema rejects unknown keys. Use different ports when supervising multiple targets concurrently. Set `DEVGUARD_HOME` to move the parent directory for project state.
 
 ## Run The Target
 
@@ -66,7 +73,7 @@ Change `build`, `watch`, or `gateway.port` when the inferred defaults do not fit
 openclaw devguard run
 ```
 
-`run` builds the target, starts the isolated Gateway through the Node-based `openclaw` CLI, verifies the expected build ID and deny hook, and watches every configured path. Changes are debounced; a successful build replaces the Gateway, while a failed build leaves the last working Gateway running.
+`run` builds and validates the target, starts the isolated Gateway through the Node-based `openclaw` CLI, verifies the expected build ID and fail-closed deny status, and watches every configured path. Changes are debounced; a successful validated build replaces the Gateway, while a failed build or validation leaves the last working Gateway running.
 
 Common modes:
 
@@ -92,7 +99,7 @@ The isolated profile does not copy model credentials or general configuration fr
 
 ## Logging And Deny Policy
 
-Operational messages use the `[devguard]` prefix. Enable debug output to observe initialization, watch events, builds, Gateway startup, runtime loading, verification, and shutdown:
+Diagnostic messages use the OpenClaw plugin logger with a `[devguard]` prefix. Enable debug output to observe initialization, watch events, builds, Gateway startup, runtime loading, verification, and shutdown:
 
 ```sh
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run
@@ -112,20 +119,36 @@ Environment values are omitted by default. Exact non-secret names can receive a 
 
 Credential-shaped names remain fully redacted even when allowlisted. If audit logging fails, the hook reports the error and still blocks the tool call.
 
-## CLI Status
-
-| Command                                                | Status          |
-| ------------------------------------------------------ | --------------- |
-| `openclaw devguard init [plugin-path]`                 | Implemented     |
-| `openclaw devguard run [--once] [--unsafe-raw-stream]` | Implemented     |
-| `openclaw devguard tail [--json]`                      | Not implemented |
-| `openclaw devguard doctor`                             | Not implemented |
-| `openclaw devguard restore`                            | Not implemented |
-
-Until `tail` exists, inspect the printed audit path with standard JSONL tools:
+Use `tail` for concise lowercase output or raw JSONL suitable for another process:
 
 ```sh
-tail -n 20 /path/to/events.jsonl
+openclaw devguard tail
+openclaw devguard tail --json
+openclaw devguard tail --json --no-follow
+```
+
+`--no-follow` reads the current complete records and exits. JSON mode writes only the underlying JSONL records to standard output; diagnostics remain on standard error.
+
+## CLI Reference
+
+| Command                                                | Behavior                                                   |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
+| `openclaw devguard init [plugin-path]`                 | Initialize isolated state, build, validate, and inspect    |
+| `openclaw devguard run [--once] [--unsafe-raw-stream]` | Supervise and verify the target                            |
+| `openclaw devguard tail [--json] [--no-follow]`        | Follow or read current audit records                       |
+| `openclaw devguard doctor`                             | Aggregate configuration, live runtime, and OpenClaw checks |
+| `openclaw devguard restore`                            | Restore or remove managed state while preserving logs      |
+
+Run `doctor` while the supervised Gateway is live. It reports every check rather than stopping at the first failure, including isolation, channel, sandbox, tool-policy, target identity, live build, runtime inspection, and OpenClaw plugin diagnostics.
+
+```sh
+openclaw devguard doctor
+```
+
+Stop `run` before restoring. `restore` atomically reinstates a saved isolated-profile configuration, removes state generated from an empty profile, preserves logs, and is safe to repeat:
+
+```sh
+openclaw devguard restore
 ```
 
 ## Verify The Watch Loop
@@ -143,4 +166,4 @@ Press `Ctrl-C` to stop the owned Gateway.
 
 ## Security Boundary
 
-DevGuard blocks OpenClaw tool calls, including unknown and plugin-defined tools. It does not isolate imports, plugin registration, background workers, direct host access, or direct network access. The configuration snapshot is retained, but `restore` is not implemented. Use stronger host isolation for untrusted plugin code.
+DevGuard blocks OpenClaw tool calls, including read-only, unknown, and plugin-defined tools. It does not isolate imports, plugin registration, background workers, direct host access, or direct network access. `restore` reverses only DevGuard-managed isolated-profile state; it cannot undo side effects performed directly by plugin code. Use stronger host isolation for untrusted plugin code.

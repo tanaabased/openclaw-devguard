@@ -78,9 +78,18 @@ The release package test builds the plugin, validates its metadata, creates an n
 
 ## Operational Scenarios
 
-The CI-first Leia scenarios under [`examples/`](./examples/) install the packed plugin, initialize a linked fixture, and complete one bounded `run --once` cycle on fresh macOS and Ubuntu runners.
+The CI-first Leia scenarios under [`examples/`](./examples/) run as entries in the existing macOS and Ubuntu example matrix. They cover:
 
-Do not run direct OpenClaw commands, plugin installation, Gateway startup, or Leia scenarios as routine local validation. Run them only when the task explicitly calls for operational testing; keep machine-mutating scenarios CI-first.
+- packed installation and CLI discovery
+- repeated target initialization
+- one bounded supervised run
+- human and JSON event tailing
+- aggregate live safety diagnostics
+- generated-state removal and saved-config restoration
+- watched rebuild and verified Gateway replacement
+- live exec, write, and unknown-tool denial with audit redaction and correlation
+
+Do not run direct OpenClaw commands, plugin installation, Gateway startup, or Leia scenarios as routine local validation. Keep these machine-mutating operational and end-to-end checks in the pull-request workflow matrix.
 
 ## Release Model
 

@@ -24,9 +24,11 @@ DevGuard:
 
 - creates project-specific OpenClaw state outside the normal profile
 - links, builds, and watches a target plugin
+- validates each successful build before replacement
 - restarts its owned Gateway only after a successful build
-- verifies the live plugin build and deny hook
+- verifies the live plugin build and fail-closed deny hook
 - records redacted tool-call attempts and blocks every tool
+- tails audit events, diagnoses safety drift, and restores isolated state
 
 The [OpenClaw guide](./OPENCLAW.md) covers the complete target-plugin workflow and CLI.
 
@@ -67,14 +69,25 @@ Use debug logging while checking the watch loop:
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 ```
 
-`tail`, `doctor`, and `restore` are registered but not implemented. See [OPENCLAW.md](./OPENCLAW.md) for configuration, Gateway access, logging, redaction, and the complete CLI status.
+Inspect recorded events without following the log, check a live supervised environment, and restore its pre-DevGuard configuration:
+
+```sh
+openclaw devguard tail --no-follow
+openclaw devguard doctor
+openclaw devguard restore
+```
+
+Run `doctor` while `run` is supervising the target. Stop supervision before `restore`. See [OPENCLAW.md](./OPENCLAW.md) for configuration, Gateway access, logging, redaction, and the complete CLI contract.
 
 ## Verification
 
 A successful run prints the active build ID, confirms the deny hook, and resolves the audit log path:
 
 ```text
-DevGuard ready: build ..., hook active, log ...
+ready        my-plugin
+build        2026-07-28T12:00:00.000Z#1
+hook         active
+log          /path/to/events.jsonl
 ```
 
 ## Development
