@@ -2,18 +2,27 @@
 
 ## Scope
 
-- Keep implementation in its nearest owning scope: plugin registration in `index.ts`, orchestration in `lib/`, pure helpers in `utils/`, and development tasks in `scripts/`.
+- Keep implementation in its nearest owning scope: plugin registration in `index.ts`, one implementation file per OpenClaw subcommand in `cli/`, CLI registration and reusable orchestration in `lib/`, pure helpers in `utils/`, and development tasks in `scripts/`.
 - Keep tests flat in `test/` and name specs after the behavior they own.
 - Treat `SPEC.md` as product intent, not evidence that a feature has been implemented.
 
 ## Runtime and tooling
 
-- Use Bun 1.3.14 for installs, scripts, tests, and builds.
-- Run OpenClaw itself with a supported Node.js runtime; do not launch the Gateway under Bun.
+- Use the Bun version pinned in `.bun-version` for installs, scripts, and builds.
+- Use the Node.js version pinned in `.node-version` for tests and OpenClaw itself; do not launch the Gateway under Bun.
 - Keep external package dependencies external in the Node-targeted ESM build.
+
+## OpenClaw integration
+
+- Inspect the installed OpenClaw SDK types, stable `openclaw/plugin-sdk/*` exports, and bundled plugin patterns before creating local logging, error, runtime, command, or CLI UX mechanisms.
+- Prefer injected SDK contexts such as `PluginLogger` and runtime interfaces over process-global behavior when they fit the surface.
+- Keep normal command output separate from diagnostic logging, and retain a small local abstraction when the SDK mechanism does not preserve the required CLI behavior.
+- Do not import private, hashed, or otherwise unexported OpenClaw implementation modules.
 
 ## Validation
 
 - Run `bun run lint`, `bun run typecheck`, `bun run test`, `bun run build`, and `bun run plugin:check` for implementation changes.
-- Use isolated OpenClaw state for installation and runtime smoke tests.
+- Do not run `bun run release:test`, direct `openclaw` commands, plugin installation, or Gateway startup unless the user explicitly requests operational validation.
+- Do not run Leia scenarios or other operational tests from `examples/` locally unless the user explicitly requests them; prefer CI for those scenarios.
+- When operational validation is explicitly requested, use isolated OpenClaw state.
 - Do not claim enforcement behavior until it exists and has focused tests.

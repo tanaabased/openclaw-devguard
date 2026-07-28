@@ -18,13 +18,13 @@ const manifest: PluginManifest = {
   id: 'openclaw-devguard',
   version: '0.0.0',
   activation: {
-    onStartup: false,
-    onCommands: ['devguard'],
+    onStartup: true,
   },
+  commandAliases: [{ name: 'devguard', kind: 'cli' }],
   configSchema: {
     type: 'object',
     additionalProperties: false,
-    properties: {},
+    properties: { logging: { type: 'object' } },
   },
 };
 
@@ -39,10 +39,11 @@ describe('utils/plugin-metadata-failures', () => {
       'unexpected OpenClaw plugin id',
       'source entry missing',
       'runtime entry missing',
-      'plugin must not activate on startup',
-      'command activation missing',
+      'plugin must activate on startup',
+      'CLI command ownership is missing',
       'config schema must describe an object',
       'config schema must be strict',
+      'logging config is missing',
     ]);
   });
 
@@ -54,11 +55,11 @@ describe('utils/plugin-metadata-failures', () => {
           ...manifest,
           configSchema: {
             ...manifest.configSchema,
-            properties: { unexpected: { type: 'boolean' } },
+            properties: {},
           },
         },
       ),
-      ['package and manifest versions differ', 'structural scaffold must not expose config'],
+      ['package and manifest versions differ', 'logging config is missing'],
     );
   });
 });

@@ -13,6 +13,9 @@ export interface DevRunnerOptions {
   startGateway: StartGateway;
   debounceMs?: number;
   shutdownTimeoutMs?: number;
+  onBuildStarted?: () => void;
+  onBuildSucceeded?: () => void;
+  onGatewayStarted?: (child: ChildProcess) => void;
   onBuildError?: (error: unknown) => void;
 }
 
@@ -91,6 +94,7 @@ export default function createDevRunner(options: DevRunnerOptions): DevRunner {
   const executeBuild = async (): Promise<void> => {
     let child: ChildProcess;
     try {
+      options.onBuildStarted?.();
       child = options.startBuild();
     } catch (error) {
       if (!stopped) options.onBuildError?.(error);
@@ -119,12 +123,14 @@ export default function createDevRunner(options: DevRunnerOptions): DevRunner {
         const reason = outcome.exit.signal ?? outcome.exit.code ?? 1;
         throw new Error(`build failed with exit ${String(reason)}`);
       }
+      options.onBuildSucceeded?.();
 
       const previousGateway = gateway;
       await stopChild(previousGateway, shutdownTimeoutMs);
       if (gateway === previousGateway) gateway = undefined;
       if (!stopped && !current.cancelled) {
         gateway = options.startGateway();
+        options.onGatewayStarted?.(gateway);
       }
     } catch (error) {
       if (!current.cancelled && !stopped) options.onBuildError?.(error);

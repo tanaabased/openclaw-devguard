@@ -3,53 +3,106 @@
 [![Lint](https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-linter.yml/badge.svg)](https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-linter.yml)
 [![Unit tests](https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-unit-tests.yml/badge.svg)](https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-unit-tests.yml)
 
-OpenClaw DevGuard is an OpenClaw plugin intended to make plugin development safer, more observable, and easier to recover. The current version is a **structural scaffold**: it installs, loads, and exposes the planned CLI, but it does not yet enforce safety policy or protect a Gateway from destructive behavior.
+OpenClaw DevGuard creates an isolated OpenClaw plugin-development profile, records attempted tool calls, and blocks every tool call by default. It also rebuilds a linked target plugin and restarts its owned Gateway when source files change.
 
-The complete product intent and threat model live in [SPEC.md](./SPEC.md). That document is a design target; this README describes only behavior present in the repository today.
+> DevGuard protects OpenClaw's tool-call pipeline. It does not isolate plugin imports, registration code, background workers, direct filesystem access, or direct network access. Use a VM or container when plugin code itself is untrusted.
 
-## What works today
+The complete product intent and threat model live in [SPEC.md](./SPEC.md). That document remains a design target; this README describes implemented behavior only.
 
-- An official `definePluginEntry`-based OpenClaw plugin entry.
-- Lazy registration of the `openclaw devguard` command tree.
-- A Node-targeted ESM bundle produced with Bun while leaving package dependencies external.
-- Unit, metadata, packed-install, runtime-load, and command-discovery checks.
-- A source watcher that rebuilds and restarts only the Gateway process it owns.
+## Quickstart
 
-Every unfinished DevGuard command exits with an explicit “not implemented” error. No command silently pretends that safeguards are active.
-
-## Requirements
-
-- [Bun](https://bun.sh/) 1.3.14 for installs, scripts, tests, and builds.
-- OpenClaw 2026.7.1-2 or newer.
-- A Node.js version supported by OpenClaw: `>=22.22.3 <23`, `>=24.15.0 <25`, or `>=25.9.0`.
-
-OpenClaw does not support running the Gateway under Bun. The development scripts use Bun as tooling and launch the Gateway through the `openclaw` Node CLI.
-
-## Develop from source
+After installing and enabling DevGuard in OpenClaw, initialize it from the plugin you want to develop:
 
 ```bash
-bun install
-bun run dev:setup
-bun run dev
+cd /path/to/openclaw-plugin
+openclaw devguard init .
+openclaw devguard run
 ```
 
-`dev:setup` builds the package, links it into OpenClaw's isolated `--dev` profile, and enables the plugin there. `dev` watches the plugin source and metadata. A successful build restarts its owned development Gateway; a failed build leaves the previous Gateway running.
+`init`:
 
-The development Gateway uses OpenClaw's `--dev` profile and port defaults. The watcher does not pass `--force`, so it will not kill an unrelated process already listening on that port.
+- creates or validates a strict `devguard.json`
+- builds and runtime-inspects the target plugin
+- creates project-specific OpenClaw state outside the normal profile
+- snapshots existing isolated-profile configuration once
+- links and enables the target plugin
+- configures token-authenticated loopback access, disabled ambient channels, denied exec, disabled elevated tools, and sandbox workspace access `none`
 
-## CLI surface
+`run` builds the target, starts the isolated Gateway under Node.js, verifies the live `devguard.status` RPC and expected build ID, then watches the configured paths. It prints the resolved state and log locations rather than requiring you to discover them.
 
-Once the plugin is installed and enabled, the scaffold exposes:
+For a bounded installation and Gateway smoke test:
+
+```bash
+openclaw devguard run --once
+```
+
+Raw OpenClaw stream tracing can contain prompts and secrets and is intentionally opt-in:
+
+```bash
+openclaw devguard run --unsafe-raw-stream
+```
+
+Operational diagnostics use the `[devguard]` prefix. With debug logging enabled, `init` reports initialization and build activity, while `run` reports watcher setup, each filesystem event, rebuilds, Gateway startup, live verification, and shutdown. That makes an edit to any configured watch path a lightweight smoke test for the watch loop. CLI diagnostics belong to the invoking OpenClaw process; plugin registration diagnostics belong to the Gateway process.
+
+## Deny policy and logs
+
+The runtime registers a high-priority, terminal `before_tool_call` hook. Deny mode blocks all tools, including unknown and plugin-defined tools, and never returns a synthetic success result.
+
+Each attempt appends correlated `tool_call_attempted` and `tool_call_blocked` records to JSONL. Records include the tool name, redacted parameters, derived paths, run and tool-call identifiers when available, Gateway process ID, plugin build ID, and environment metadata.
+
+This audit JSONL is separate from operational logging and remains the canonical record of DevGuard policy decisions.
+
+Environment values are not logged by default. Each variable records its name, presence, and value length. Add exact non-secret names to `devguard.json` when a masked preview would help verify configuration:
+
+```json
+{
+  "logging": {
+    "environmentValueAllowlist": ["NODE_ENV", "MY_PLUGIN_MODE"]
+  }
+}
+```
+
+Allowlisted values use a short head/tail preview such as `de…nt`. Credential-shaped names containing segments such as `TOKEN`, `SECRET`, `PASSWORD`, `AUTH`, `COOKIE`, `SESSION`, `PRIVATE`, `CREDENTIAL`, or `KEY` remain fully redacted even if allowlisted. Tool-argument environments are recorded separately, and logs explicitly do not claim to represent the final complete child-process environment.
+
+If JSONL append fails, the hook reports the logging failure and still blocks the tool call.
+
+## Current CLI
 
 ```text
 openclaw devguard init [plugin-path]
-openclaw devguard run [--unsafe-raw-stream]
+openclaw devguard run [--once] [--unsafe-raw-stream]
 openclaw devguard tail [--json]
 openclaw devguard doctor
 openclaw devguard restore
 ```
 
-`--help` is functional. Command actions are intentionally unfinished and return a nonzero error.
+`init` and `run` are functional. `tail`, `doctor`, and `restore` still fail with an explicit “not implemented” error; their presence does not imply those safeguards are complete.
+
+## Requirements
+
+- The [Bun version](./.bun-version) pinned for installs, builds, and scripts.
+- The [Node.js version](./.node-version) pinned for tests and the local OpenClaw runtime.
+- OpenClaw 2026.7.1-2 or newer.
+
+The published package accepts every Node.js range supported by its OpenClaw peer dependency. OpenClaw does not support running the Gateway under Bun; `devguard run` launches it through the Node-based `openclaw` CLI.
+
+## Develop DevGuard from source
+
+```bash
+bun install
+bun run build
+openclaw plugins install --link .
+openclaw plugins enable openclaw-devguard
+```
+
+The repository's lower-level development loop remains available:
+
+```bash
+bun run dev:setup
+bun run dev
+```
+
+That loop uses OpenClaw's built-in `--dev` profile to rebuild DevGuard itself. The product-facing `devguard init` and `devguard run` commands instead create per-target isolated state and perform live build verification.
 
 ## Validate
 
@@ -59,16 +112,13 @@ bun run typecheck
 bun run test
 bun run build
 bun run plugin:check
-bun run release:test
 ```
 
-`release:test` packs the npm artifact, installs it into disposable OpenClaw state, loads the compiled runtime entry, runs OpenClaw's plugin doctor, checks CLI help, and verifies an unfinished command fails honestly. It does not modify the user's normal OpenClaw profile.
-
-OpenClaw's `plugins validate` command currently validates tool-only authoring scaffolds, so this mixed CLI plugin uses runtime inspection and doctor checks instead.
+Operational validation is opt-in because it runs OpenClaw commands and starts a Gateway. When explicitly requested, `bun run release:test` packs the npm artifact, installs it into disposable OpenClaw state, initializes an external fixture plugin, starts a token-authenticated isolated Gateway, verifies the live DevGuard build and hook status, and shuts the Gateway down. It does not modify the normal OpenClaw profile.
 
 ## Release model
 
-GitHub Releases drive npm publication. Stable releases publish to `latest`; prereleases publish to `edge`. npm trusted publishing handles `npm publish`, while the `TANAAB_NPM_DEPLOY` secret is scoped only to synchronizing the `edge` dist-tag after a stable release. `TANAAB_COAXIUM_INJECTOR` handles release commit and tag synchronization.
+GitHub Releases drive npm publication. Stable releases publish to `latest`; prereleases publish to `edge`. npm trusted publishing handles `npm publish`, while `TANAAB_NPM_DEPLOY` is scoped only to synchronizing the `edge` dist-tag after a stable release. `TANAAB_COAXIUM_INJECTOR` handles release commit and tag synchronization.
 
 ## License
 

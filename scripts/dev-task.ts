@@ -24,6 +24,7 @@ const runner = createDevRunner({
 const watcher = chokidar.watch(
   [
     'index.ts',
+    'cli/**/*.ts',
     'lib/**/*.ts',
     'utils/**/*.ts',
     'openclaw.plugin.json',

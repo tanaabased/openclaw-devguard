@@ -4,12 +4,25 @@
   "description": "Development-time safety guardrails for OpenClaw plugin work.",
   "version": "0.0.0",
   "activation": {
-    "onStartup": false,
-    "onCommands": ["devguard"]
+    "onStartup": true
   },
+  "commandAliases": [{ "name": "devguard", "kind": "cli" }],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "properties": {}
+    "properties": {
+      "logging": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "logPath": { "type": "string", "minLength": 1 },
+          "environmentValueAllowlist": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
   }
 }

@@ -1,4 +1,7 @@
 export interface PackageMetadata {
+  engines?: {
+    node?: string;
+  };
   name?: string;
   version?: string;
   openclaw?: {
@@ -11,7 +14,12 @@ export interface PluginManifest {
   id?: string;
   version?: string;
   activation?: { onStartup?: boolean; onCommands?: string[] };
-  configSchema?: { type?: string; additionalProperties?: boolean; properties?: object };
+  commandAliases?: Array<{ name?: string; kind?: string }>;
+  configSchema?: {
+    type?: string;
+    additionalProperties?: boolean;
+    properties?: Record<string, unknown>;
+  };
 }
 
 export default function pluginMetadataFailures(
@@ -34,17 +42,15 @@ export default function pluginMetadataFailures(
     packageMetadata.openclaw?.runtimeExtensions?.includes('./dist/index.js') === true,
     'runtime entry missing',
   );
-  check(manifest.activation?.onStartup === false, 'plugin must not activate on startup');
+  check(manifest.activation?.onStartup === true, 'plugin must activate on startup');
   check(
-    manifest.activation?.onCommands?.includes('devguard') === true,
-    'command activation missing',
+    manifest.commandAliases?.some((alias) => alias.name === 'devguard' && alias.kind === 'cli') ===
+      true,
+    'CLI command ownership is missing',
   );
   check(manifest.configSchema?.type === 'object', 'config schema must describe an object');
   check(manifest.configSchema?.additionalProperties === false, 'config schema must be strict');
-  check(
-    Object.keys(manifest.configSchema?.properties ?? {}).length === 0,
-    'structural scaffold must not expose config',
-  );
+  check(manifest.configSchema?.properties?.logging !== undefined, 'logging config is missing');
 
   return failures;
 }
