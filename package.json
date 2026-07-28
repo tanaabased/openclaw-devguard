@@ -1,6 +1,6 @@
 {
   "name": "@tanaab/openclaw-devguard",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Development-time safety guardrails for OpenClaw plugin work.",
   "license": "MIT",
   "type": "module",

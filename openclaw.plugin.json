@@ -2,7 +2,7 @@
   "id": "openclaw-devguard",
   "name": "OpenClaw DevGuard",
   "description": "Development-time safety guardrails for OpenClaw plugin work.",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "activation": {
     "onStartup": true
   },
