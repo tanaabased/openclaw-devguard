@@ -29,11 +29,3 @@ set -o pipefail
 grep -F "DevGuard ready: build" "$TMPDIR/run.log"
 grep -F "hook active" "$TMPDIR/run.log"
 ```
-
-## Destroy tests
-
-```bash
-# should remove only isolated run state
-test "$TMPDIR" = "$GITHUB_WORKSPACE/examples/run/.tmp"
-rm -rf "$OPENCLAW_STATE_DIR" "$DEVGUARD_HOME" "$TMPDIR/plugin" "$TMPDIR/run.log"
-```

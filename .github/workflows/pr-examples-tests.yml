@@ -43,16 +43,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - name: Read Bun version
-        id: bun-version
-        shell: bash
-        run: echo "version=$(tr -d '\r\n' < .bun-version)" >> "$GITHUB_OUTPUT"
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Prepare release-shaped build
         uses: tanaabased/prepare-release-action@v1
         with:
-          bun-version: ${{ steps.bun-version.outputs.version }}
           version: ${{ env.STAMPED_VERSION }}
           sync: false
           commands: |
@@ -75,4 +70,4 @@ jobs:
           TMPDIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp
         run: |
           mkdir -p "$TMPDIR"
-          bun run leia "examples/${{ matrix.example }}/README.md" -c "Destroy tests" --stdin --retry 0
+          bun run leia "examples/${{ matrix.example }}/README.md" --stdin --retry 0

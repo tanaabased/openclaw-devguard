@@ -37,11 +37,3 @@ test -f "$TMPDIR/plugin/dist/index.js"
 # should report reused project configuration
 grep -F "Configuration: reused" "$TMPDIR/init-second.log"
 ```
-
-## Destroy tests
-
-```bash
-# should remove only isolated init state
-test "$TMPDIR" = "$GITHUB_WORKSPACE/examples/init/.tmp"
-rm -rf "$OPENCLAW_STATE_DIR" "$DEVGUARD_HOME" "$TMPDIR/plugin" "$TMPDIR/init-first.log" "$TMPDIR/init-second.log"
-```

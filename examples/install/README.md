@@ -31,11 +31,3 @@ openclaw devguard --help | grep -F "init"
 openclaw devguard --help | grep -F "run"
 openclaw devguard run --help | grep -F -- "--once"
 ```
-
-## Destroy tests
-
-```bash
-# should remove only isolated install state
-test "$TMPDIR" = "$GITHUB_WORKSPACE/examples/install/.tmp"
-rm -rf "$OPENCLAW_STATE_DIR" "$DEVGUARD_HOME" "$TMPDIR/inspection.json"
-```
