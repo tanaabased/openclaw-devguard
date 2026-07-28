@@ -15,7 +15,11 @@ export default definePluginEntry({
       const outcome = await runBeforeToolCallHook({
         toolName,
         toolCallId: `leia-${toolName}`,
-        params: { command: `write ${sentinelPath}`, path: sentinelPath },
+        params: {
+          command: `write ${sentinelPath}`,
+          env: { DEVGUARD_TEST_SECRET: 'leia-sensitive-value' },
+          path: sentinelPath,
+        },
         ctx: {
           agentId: 'leia-agent',
           runId: 'leia-run',

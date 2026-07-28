@@ -51,7 +51,8 @@ async function assertBlocked(path) {
 }
 
 async function assertDenyLog(path) {
-  const events = records(await readFile(path, 'utf8'));
+  const contents = await readFile(path, 'utf8');
+  const events = records(contents);
   const attempted = events.filter(({ event }) => event === 'tool_call_attempted');
   const blocked = events.filter(({ event }) => event === 'tool_call_blocked');
   const expectedTools = new Set(['exec', 'write', 'totally-unknown-tool']);
@@ -66,6 +67,22 @@ async function assertDenyLog(path) {
   }
   if (blocked.some(({ decision }) => decision !== 'blocked')) {
     throw new Error('deny log contained a non-blocking terminal decision');
+  }
+  if (contents.includes('leia-sensitive-value') || !contents.includes('[REDACTED]')) {
+    throw new Error('deny log did not redact the seeded tool environment secret');
+  }
+  if (
+    attempted.some(
+      ({ agentId, pluginBuildId, pluginId, runId, sessionKey, toolCallId }) =>
+        agentId !== 'leia-agent' ||
+        !pluginBuildId ||
+        pluginId !== 'devguard-example' ||
+        runId !== 'leia-run' ||
+        sessionKey !== 'agent:leia:main' ||
+        !toolCallId,
+    )
+  ) {
+    throw new Error('deny log did not retain the expected tool-call correlation fields');
   }
 }
 

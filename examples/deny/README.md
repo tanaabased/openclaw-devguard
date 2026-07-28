@@ -33,7 +33,7 @@ openclaw gateway call devguard-example.attempt-tool --json --url ws://127.0.0.1:
 node "$GITHUB_WORKSPACE/examples/support/check.mjs" assert-blocked "$TMPDIR/write-result.json"
 test ! -e "$TMPDIR/write-sentinel"
 
-# should deny unknown tools and record every terminal decision
+# should deny unknown tools and record redacted correlated decisions
 openclaw gateway call devguard-example.attempt-tool --json --url ws://127.0.0.1:19001 --token "$(cat "$TMPDIR/token-path")" --params '{"toolName":"totally-unknown-tool"}' > "$TMPDIR/unknown-result.json"
 node "$GITHUB_WORKSPACE/examples/support/check.mjs" assert-blocked "$TMPDIR/unknown-result.json"
 test ! -e "$TMPDIR/totally-unknown-tool-sentinel"
