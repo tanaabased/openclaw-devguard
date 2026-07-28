@@ -234,7 +234,8 @@ It must:
 
 ## Tool Policy
 
-DevGuard should register a high-priority `before_tool_call` hook.
+DevGuard should register a high-priority non-terminal `before_tool_call` capture hook and a
+low-priority terminal deny hook so target-plugin pre-execution hooks can run between them.
 
 Default policy:
 
@@ -598,7 +599,7 @@ Consider explicit `approve` and dangerous `observe` modes only after their opera
 
 ### Phase 2: Tool capture
 
-- register high-priority `before_tool_call`
+- register high-priority capture and low-priority deny `before_tool_call` hooks
 - classify tool effects
 - implement deny policy
 - implement unknown-tool denial

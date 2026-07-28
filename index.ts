@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 
 import { logDebug, logInfo, reportError } from './lib/logger.ts';
-import createToolGuard, { TOOL_GUARD_PRIORITY } from './lib/tool-guard.ts';
+import createToolGuard, { TOOL_CAPTURE_PRIORITY, TOOL_GUARD_PRIORITY } from './lib/tool-guard.ts';
 import registerDevguardCli from './lib/register-cli.ts';
 
 interface DevguardPluginConfig {
@@ -57,9 +57,13 @@ export default definePluginEntry({
       },
     });
 
-    api.on('before_tool_call', guard.beforeToolCall, { priority: TOOL_GUARD_PRIORITY });
+    api.on('before_tool_call', guard.captureToolCall, { priority: TOOL_CAPTURE_PRIORITY });
+    api.on('before_tool_call', guard.blockToolCall, { priority: TOOL_GUARD_PRIORITY });
     if (api.registrationMode === 'full') {
-      logInfo(api.logger, `deny policy registered with priority ${TOOL_GUARD_PRIORITY}`);
+      logInfo(
+        api.logger,
+        `tool capture and deny policy registered with priorities ${TOOL_CAPTURE_PRIORITY}/${TOOL_GUARD_PRIORITY}`,
+      );
       logDebug(api.logger, `audit log configured at ${settings.logPath}`);
     }
     api.registerGatewayMethod('devguard.status', ({ respond }) => {

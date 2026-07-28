@@ -54,7 +54,8 @@ export interface ToolGuardStatus {
   stateDirectory?: string;
 }
 
-export const TOOL_GUARD_PRIORITY = 1_000_000;
+export const TOOL_CAPTURE_PRIORITY = 1_000_000;
+export const TOOL_GUARD_PRIORITY = -1_000_000;
 
 async function appendJsonl(path: string, records: readonly object[]): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -77,7 +78,8 @@ function classifyEffects(toolName: string): string[] {
 }
 
 export default function createToolGuard(options: ToolGuardOptions): {
-  beforeToolCall: (
+  captureToolCall: (event: BeforeToolCallEvent, context: BeforeToolCallContext) => Promise<void>;
+  blockToolCall: (
     event: BeforeToolCallEvent,
     context: BeforeToolCallContext,
   ) => Promise<{ block: true; blockReason: string }>;
@@ -88,60 +90,66 @@ export default function createToolGuard(options: ToolGuardOptions): {
   const now = options.now ?? (() => new Date());
   const append = options.append ?? appendJsonl;
 
+  function correlation(event: BeforeToolCallEvent, context: BeforeToolCallContext) {
+    return {
+      timestamp: now().toISOString(),
+      runId: event.runId ?? context.runId,
+      toolCallId: event.toolCallId ?? context.toolCallId,
+      agentId: context.agentId,
+      sessionKey: context.sessionKey,
+      sessionId: context.sessionId,
+      channelId: context.channelId,
+      pluginId: options.pluginId,
+      pluginBuildId: options.buildId,
+      gatewayProcessId: process.pid,
+      toolName: event.toolName,
+      toolKind: event.toolKind ?? context.toolKind,
+      toolInputKind: event.toolInputKind ?? context.toolInputKind,
+    };
+  }
+
   return {
-    async beforeToolCall(event, context) {
-      const timestamp = now().toISOString();
-      const runId = event.runId ?? context.runId;
-      const toolCallId = event.toolCallId ?? context.toolCallId;
+    async captureToolCall(event, context) {
       const toolEnvironment = extractToolEnvironment(event.params);
-      const correlation = {
-        timestamp,
-        runId,
-        toolCallId,
-        agentId: context.agentId,
-        sessionKey: context.sessionKey,
-        sessionId: context.sessionId,
-        channelId: context.channelId,
-        pluginId: options.pluginId,
-        pluginBuildId: options.buildId,
-        gatewayProcessId: process.pid,
-        toolName: event.toolName,
-        toolKind: event.toolKind ?? context.toolKind,
-        toolInputKind: event.toolInputKind ?? context.toolInputKind,
-      };
-      const reason = 'DevGuard deny mode blocks all tool calls, including unknown tools.';
-      const records = [
-        {
-          event: 'tool_call_attempted',
-          ...correlation,
-          params: redactValue(event.params),
-          derivedPaths: event.derivedPaths ?? [],
-          effects: classifyEffects(event.toolName),
-          environment: {
-            gatewayProcess: summarizeEnvironment(
-              environment as Record<string, unknown>,
-              environmentValueAllowlist,
-            ),
-            toolArguments: summarizeEnvironment(toolEnvironment, environmentValueAllowlist),
-            devguardInjectedNames: Object.keys(environment)
-              .filter(
-                (name) => name.startsWith('DEVGUARD_') || name.startsWith('OPENCLAW_DEVGUARD_'),
-              )
-              .sort(),
-            finalToolProcessEnvironmentComplete: false,
+      try {
+        await append(options.logPath, [
+          {
+            event: 'tool_call_attempted',
+            ...correlation(event, context),
+            params: redactValue(event.params),
+            derivedPaths: event.derivedPaths ?? [],
+            effects: classifyEffects(event.toolName),
+            environment: {
+              gatewayProcess: summarizeEnvironment(
+                environment as Record<string, unknown>,
+                environmentValueAllowlist,
+              ),
+              toolArguments: summarizeEnvironment(toolEnvironment, environmentValueAllowlist),
+              devguardInjectedNames: Object.keys(environment)
+                .filter(
+                  (name) => name.startsWith('DEVGUARD_') || name.startsWith('OPENCLAW_DEVGUARD_'),
+                )
+                .sort(),
+              finalToolProcessEnvironmentComplete: false,
+            },
           },
-        },
-        {
-          event: 'tool_call_blocked',
-          ...correlation,
-          decision: 'blocked',
-          reason,
-        },
-      ];
+        ]);
+      } catch (error) {
+        options.onLogError?.(error);
+      }
+    },
+    async blockToolCall(event, context) {
+      const reason = 'DevGuard deny mode blocks all tool calls, including unknown tools.';
+      const record = {
+        event: 'tool_call_blocked',
+        ...correlation(event, context),
+        decision: 'blocked',
+        reason,
+      };
 
       let blockReason = reason;
       try {
-        await append(options.logPath, records);
+        await append(options.logPath, [record]);
       } catch (error) {
         options.onLogError?.(error);
         blockReason = `${reason} Event logging failed; execution remains blocked.`;
