@@ -1,0 +1,35 @@
+# Dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+*.tgz
+
+# Logs and runtime data
+*.log
+logs/
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+*.pid
+*.pid.lock
+
+# Local configuration and caches
+.env
+.env.*
+!.env.example
+.npm/
+.eslintcache
+.cache/
+.temp/
+/.tmp/
+cache/
+temp/
+examples/**/.tmp/
+
+# Operating-system and editor files
+.DS_Store
+._*
+.*.swp
+.idea/
+*.sublime-*

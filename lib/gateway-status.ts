@@ -1,0 +1,103 @@
+export interface GatewayStatus {
+  pluginId?: string;
+  pluginBuildId?: string;
+  hookRegistered?: boolean;
+  policyMode?: string;
+  logPath?: string;
+  gatewayProcessId?: number;
+}
+
+export class GatewayStatusTimeoutError extends Error {
+  readonly expectedBuildId: string;
+  readonly lastObservedBuildId?: string;
+  readonly timeoutMs: number;
+
+  constructor(options: {
+    expectedBuildId: string;
+    lastObservedBuildId?: string;
+    lastQueryError?: unknown;
+    timeoutMs: number;
+  }) {
+    super(`DevGuard Gateway did not load the expected plugin build within ${options.timeoutMs}ms`, {
+      cause: options.lastQueryError,
+    });
+    this.name = 'GatewayStatusTimeoutError';
+    this.expectedBuildId = options.expectedBuildId;
+    this.lastObservedBuildId = options.lastObservedBuildId;
+    this.timeoutMs = options.timeoutMs;
+  }
+}
+
+export interface WaitForGatewayStatusOptions {
+  delay?: (milliseconds: number) => Promise<void>;
+  expectedBuildId: string;
+  isCurrent: () => boolean;
+  now?: () => number;
+  pollIntervalMs?: number;
+  queryStatus: () => Promise<unknown>;
+  timeoutMs: number;
+}
+
+function parseGatewayStatus(value: unknown): GatewayStatus {
+  if (value === null || Array.isArray(value) || typeof value !== 'object') {
+    throw new TypeError('Gateway returned an invalid DevGuard status payload');
+  }
+  return value as GatewayStatus;
+}
+
+function validateReadyStatus(status: GatewayStatus): void {
+  if (status.hookRegistered !== true) {
+    throw new Error('Gateway did not register the DevGuard hook');
+  }
+  if (status.policyMode !== 'deny') {
+    throw new Error('Gateway is not using DevGuard deny mode');
+  }
+}
+
+export default async function waitForGatewayStatus(
+  options: WaitForGatewayStatusOptions,
+): Promise<GatewayStatus | undefined> {
+  const now = options.now ?? Date.now;
+  const delay =
+    options.delay ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolveDelay) => setTimeout(resolveDelay, milliseconds)));
+  const deadline = now() + options.timeoutMs;
+  const pollIntervalMs = options.pollIntervalMs ?? 200;
+  let lastObservedBuildId: string | undefined;
+  let lastQueryError: unknown;
+
+  while (now() < deadline) {
+    if (!options.isCurrent()) return undefined;
+
+    let result: unknown;
+    try {
+      result = await options.queryStatus();
+      lastQueryError = undefined;
+    } catch (error) {
+      lastQueryError = error;
+      await delay(pollIntervalMs);
+      continue;
+    }
+
+    if (!options.isCurrent()) return undefined;
+
+    const status = parseGatewayStatus(result);
+    lastObservedBuildId = status.pluginBuildId;
+    if (status.pluginBuildId === options.expectedBuildId) {
+      validateReadyStatus(status);
+      return status;
+    }
+
+    await delay(pollIntervalMs);
+  }
+
+  if (!options.isCurrent()) return undefined;
+
+  throw new GatewayStatusTimeoutError({
+    expectedBuildId: options.expectedBuildId,
+    lastObservedBuildId,
+    lastQueryError,
+    timeoutMs: options.timeoutMs,
+  });
+}
