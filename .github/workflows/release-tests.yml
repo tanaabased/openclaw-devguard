@@ -39,6 +39,6 @@ jobs:
       - name: Upgrade npm for publish validation
         run: npm install --global "npm@^11.5.1"
       - name: Run release package tests
-        run: bun run release:test
+        run: bun run test:release
       - name: Validate npm publish
         run: npm publish --access public --tag edge --dry-run

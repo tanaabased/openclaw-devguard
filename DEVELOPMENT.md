@@ -71,7 +71,7 @@ This makes DevGuard both the guard and the target. Developing another plugin fol
 ## Package Validation
 
 ```sh
-bun run release:test
+bun run test:release
 ```
 
 The release package test builds the plugin, validates its metadata, creates an npm archive, and confirms that the required runtime, manifest, source, CLI, and library files are present.

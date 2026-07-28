@@ -64,7 +64,7 @@ jobs:
           bun run build
           bun run format:check
       - name: Validate packed plugin package
-        run: bun run release:test
+        run: bun run test:release
       - name: Upgrade npm for trusted publishing
         run: npm install --global "npm@^11.5.1"
       - name: Publish stable package with trusted publishing
