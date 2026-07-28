@@ -1,8 +1,8 @@
 import doctorDevguard from '../cli/doctor.ts';
 import initDevguard from '../cli/init.ts';
+import restoreDevguard from '../cli/restore.ts';
 import runDevguard from '../cli/run.ts';
 import tailDevguard from '../cli/tail.ts';
-import notImplemented from '../utils/not-implemented.ts';
 import { defaultCliOutput, type CliOutput } from './cli-output.ts';
 import { type Logger, reportError } from './logger.ts';
 
@@ -103,5 +103,12 @@ export default function registerDevguardCli(
   devguard
     .command('restore')
     .description('Restore the most recent DevGuard-managed development state.')
-    .action(() => notImplemented('restore'));
+    .action(async () => {
+      await runCliAction(options.logger, 'restore failed', async () => {
+        await restoreDevguard(process.cwd(), {
+          logger: options.logger,
+          output,
+        });
+      });
+    });
 }

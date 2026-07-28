@@ -60,6 +60,7 @@ try {
     'index.ts',
     'cli/doctor.ts',
     'cli/init.ts',
+    'cli/restore.ts',
     'cli/run.ts',
     'cli/tail.ts',
     'lib/cli-output.ts',

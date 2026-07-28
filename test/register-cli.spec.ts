@@ -63,18 +63,14 @@ describe('lib/register-cli', () => {
     assert.deepEqual(new Set(findCommand(devguard, 'tail').options), new Set(['--json']));
   });
 
-  it('should fail only the explicitly unfinished actions consistently', () => {
+  it('should expose handlers for every implemented command', () => {
     const program = new FakeCommand();
     registerDevguardCli(program, { logger });
     const devguard = findCommand(program, 'devguard');
 
-    for (const specification of ['restore']) {
+    for (const specification of ['doctor', 'restore']) {
       const command = findCommand(devguard, specification);
       assert.equal(typeof command.handler, 'function');
-      assert.throws(
-        () => command.handler?.(),
-        (error: unknown) => error instanceof Error && error.name === 'DevguardNotImplementedError',
-      );
     }
   });
 
