@@ -15,22 +15,22 @@ OpenClaw does not support running the Gateway under Bun. The build remains Node-
 Install a linked development checkout in the normal OpenClaw profile:
 
 ```sh
-# Clone the repository and install its pinned dependencies.
+# clone the repository and install its pinned dependencies.
 git clone https://github.com/tanaabased/openclaw-devguard.git
 cd openclaw-devguard
 bun install
 
-# Build the Node-targeted plugin.
+# build the node-targeted plugin.
 bun run build
 
-# If OpenClaw reports a conflicting installation, remove it before linking.
+# if openclaw reports a conflicting installation, remove it before linking.
 # openclaw plugins uninstall openclaw-devguard --force
 
-# Link and enable this checkout in the normal OpenClaw profile.
+# link and enable this checkout in the normal openclaw profile.
 openclaw plugins install --link .
 openclaw plugins enable openclaw-devguard
 
-# Confirm that OpenClaw can load the development build.
+# confirm that openclaw can load the development build.
 openclaw plugins inspect openclaw-devguard --runtime --json
 openclaw plugins doctor
 ```
@@ -44,7 +44,7 @@ The primary development workflow makes DevGuard both the installed guard and the
 Initialize the checkout and import an agent you can use for a live turn:
 
 ```sh
-# Replace my-agent with an agent configured in your normal OpenClaw profile.
+# replace my-agent with an agent configured in your normal openclaw profile.
 openclaw devguard init . --agent my-agent
 ```
 
@@ -78,10 +78,10 @@ openclaw devguard exec -- agent \
 Inspect the recorded tool lifecycle and the live isolated environment while `run` remains active:
 
 ```sh
-# Read the current complete audit records without following.
+# read the current complete audit records without following.
 openclaw devguard tail --no-follow
 
-# Verify the isolated profile, target build, and deny hook.
+# verify the isolated profile, target build, and deny hook.
 openclaw devguard doctor
 ```
 

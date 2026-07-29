@@ -11,179 +11,91 @@
   <img src="https://img.shields.io/badge/Ubuntu-24.04-00c88a" alt="Ubuntu 24.04" />
 </p>
 
-OpenClaw DevGuard is a third-party development plugin that builds another OpenClaw plugin in an isolated profile, supervises its Gateway, and blocks and audits agent tool calls.
+DevGuard gives advanced OpenClaw plugin development its own isolated profile and Gateway, carries over the agents you use, rebuilds as you edit, and blocks and records agent-requested tool calls while you test.
 
 > [!NOTE]
 > Requires OpenClaw 2026.7.1-2 or newer. CI covers macOS 26 and Ubuntu 24.04.
 
 > [!WARNING]
-> DevGuard is intended for development profiles that run with OpenClaw Docker sandboxing off, and it configures its isolated profile that way. Its OpenClaw exec layer is intentionally permissive so model transport and tool requests reach DevGuard's terminal policy hook. DevGuard protects that tool-call pipeline but does not isolate plugin imports, registration code, background workers, or direct filesystem and network access. Workflows that require OpenClaw's Docker sandbox are not currently supported; use a separate VM or container for untrusted code.
+> DevGuard runs with OpenClaw Docker sandboxing off and is not a complete safety boundary. It limits mutation by blocking agent-requested tool calls, but plugin code and any direct host access remain outside that protection. Use a VM or container for untrusted code.
 
 ## Overview
 
-DevGuard:
+Use DevGuard to:
 
-- creates a stable project-specific native OpenClaw profile
-- imports selected agents, model configuration, and portable authentication
-- links, builds, and watches a target plugin
-- validates each successful build before replacement
-- restarts its owned Gateway only after a successful build
-- verifies the live plugin build and fail-closed deny hook
-- records redacted tool-call attempts and blocks every tool
-- tails audit events, diagnoses safety drift, and restores isolated state
-
-The normal OpenClaw profile exposes the DevGuard CLI. Each initialized target receives its own configuration, native profile, supervised Gateway, and local DevGuard state:
-
-```text
-normal OpenClaw profile: DevGuard CLI
-             |
-target repository: devguard.json and plugin source
-             |
-isolated OpenClaw profile: DevGuard + linked target + owned Gateway
-             |
-local DevGuard state: marker + token + snapshot + logs
-```
+- develop one plugin in a dedicated OpenClaw profile and Gateway instead of your normal environment
+- carry over the agents you choose, including their workspaces, identities, model settings, and portable authentication
+- watch, rebuild, validate, and restart the development Gateway as you edit
+- exercise advanced plugin surfaces such as lifecycle hooks, tool hooks, Gateway methods, and plugin-owned CLI commands through real OpenClaw flows
+- let earlier hooks observe or modify a tool request before DevGuard blocks its execution
+- inspect redacted tool attempts, rebuilds, and Gateway readiness, then restore the isolated environment when you are done
 
 See [ADVANCED.md](./ADVANCED.md) for the complete configuration and CLI references, profile-import details, logging behavior, and security boundary.
 
-## Quickstart
+## Installation
 
-Install DevGuard from source into the normal OpenClaw profile:
+Install the latest compatible stable release from npm into the normal OpenClaw profile:
 
 ```sh
-git clone https://github.com/tanaabased/openclaw-devguard.git
-cd openclaw-devguard
-bun install
-bun run build
-openclaw plugins install --link .
+openclaw plugins install npm:@tanaab/openclaw-devguard
 openclaw plugins enable openclaw-devguard
 ```
 
-Initialize the plugin you want to develop from its repository:
+See [DEVELOPMENT.md](./DEVELOPMENT.md#install-from-source) when installing a linked source checkout.
+
+## Usage
+
+In terminal 1, initialize the OpenClaw plugin you want to develop and start its supervised Gateway:
 
 ```sh
-cd /path/to/openclaw-plugin
-openclaw devguard init .
-openclaw devguard run
-```
+cd /path/to/my-openclaw-plugin
 
-`init` creates `devguard.json`, builds and validates the target, and prepares its isolated OpenClaw profile. By default, it imports `main`, the source profile's configured default agent when different, their workspaces and identities, effective model configuration, and portable authentication.
+# replace my-agent with an agent configured in your normal openclaw profile.
+openclaw devguard init . --agent my-agent
 
-Import other configured agents by exact ID or skip model and authentication transfer:
-
-```sh
-openclaw devguard init . --agent ops --agent qa
-openclaw devguard init . --no-model-profile
-```
-
-Running `init` inside this repository is the supported dogfooding path and makes DevGuard both the guard and the target.
-
-## Use The Isolated Gateway
-
-Keep `run` active while testing Gateway-backed or model-backed OpenClaw commands. In another terminal, use `exec` for one native command:
-
-```sh
-cd /path/to/openclaw-plugin
-openclaw devguard exec -- plugins inspect my-plugin --runtime --json
-openclaw devguard exec -- agent --session-key devguard-smoke --message "Call an available tool" --json
-```
-
-Use `shell` when several commands belong in one session:
-
-```sh
-openclaw devguard shell
-openclaw plugins inspect my-plugin --runtime --json
-openclaw agent --session-key devguard-smoke --message "Call an available tool" --json
-exit
-```
-
-Both commands inherit the caller's environment, select the initialized isolated profile, disable ambient channels, and run from the target root. They do not start the Gateway themselves.
-
-For a bounded build and readiness check that stops the Gateway before returning:
-
-```sh
+# confirm one build, gateway startup, and live deny hook, then stop.
 openclaw devguard run --once
-```
 
-## Inspect And Restore
-
-Follow concise audit output, emit raw JSONL, or read the current complete records without following:
-
-```sh
-openclaw devguard tail
-openclaw devguard tail --json
-openclaw devguard tail --json --no-follow
-```
-
-Run `doctor` while `run` is supervising the target. It checks the isolated profile, imported agents, live target build, deny hook, Gateway policy, and OpenClaw plugin diagnostics:
-
-```sh
-openclaw devguard doctor
-```
-
-Stop supervision before restoring. `restore` removes DevGuard-managed isolated state, reinstates a saved isolated configuration when one existed, and preserves audit logs:
-
-```sh
-openclaw devguard restore
-```
-
-## Configuration
-
-`init` generates a strict `devguard.json` in the target root. The most commonly edited values are the build and validation commands, watched paths, environment-value preview allowlist, and Gateway port:
-
-```json
-{
-  "version": 1,
-  "plugin": {
-    "id": "my-plugin",
-    "build": {
-      "command": "bun",
-      "args": ["run", "build"]
-    },
-    "validate": {
-      "command": "bun",
-      "args": ["run", "plugin:check"]
-    },
-    "watch": ["src", "openclaw.plugin.json", "package.json"]
-  },
-  "logging": {
-    "environmentValueAllowlist": []
-  },
-  "gateway": {
-    "port": 19001
-  }
-}
-```
-
-Use a different port for each concurrently supervised target. See the [configuration reference](./ADVANCED.md#configuration-reference) for every field, inferred default, validation rule, and path convention.
-
-## Verification
-
-A successful run prints the active profile and build, confirms the deny hook, and resolves the audit log path:
-
-```text
-ready        my-plugin
-profile      devguard-my-plugin-a1b2c3d4e5f6
-build        2026-07-28T12:00:00.000Z#1
-hook         active
-log          /path/to/events.jsonl
-```
-
-Enable OpenClaw debug logging when inspecting initialization, builds, Gateway startup, runtime loading, verification, and shutdown:
-
-```sh
+# start the watched development gateway.
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 ```
 
-## Development
+For example, add OpenClaw's `resolve_exec_env` hook inside the same target plugin's `register(api)` implementation. Saving the change causes `run` to rebuild, validate, and replace the Gateway:
 
-```sh
-bun install
-bun run lint
-bun run test
+```ts
+api.on('resolve_exec_env', ({ host }) => {
+  api.logger.info(`adding DEVGUARD_EXAMPLE=1 to ${host} exec`);
+  return { DEVGUARD_EXAMPLE: '1' };
+});
 ```
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for the repository layout, complete validation suite, live development loops, dogfooding, package validation, and CI-first operational scenarios.
+In terminal 2, verify the live environment, ask the same imported agent to call exec, and inspect the resulting audit events:
+
+```sh
+cd /path/to/my-openclaw-plugin
+
+# check the isolated profile, target build, gateway, and deny hook.
+openclaw devguard doctor
+
+# trigger the target plugin's exec-environment hook through the imported agent.
+openclaw devguard exec -- agent \
+  --agent my-agent \
+  --session-key devguard-example \
+  --message "Use the exec tool to print the value of DEVGUARD_EXAMPLE." \
+  --json
+
+# read the attempted and blocked tool-call records.
+openclaw devguard tail --no-follow
+
+# stop run in terminal 1 with ctrl-c, then optionally remove managed state.
+openclaw devguard restore
+```
+
+The hook runs while OpenClaw prepares the exec request, so its diagnostic appears in terminal 1. DevGuard then records and blocks the tool call; the command itself does not execute. See [ADVANCED.md](./ADVANCED.md) for agent and model import, configuration, logging, `exec` and `shell`, recovery, and the complete CLI contract.
+
+## Development
+
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for source installation, dogfooding, the complete validation suite, Leia scenarios, and coding standards.
 
 ## Issues, Questions and Support
 

@@ -264,16 +264,16 @@ The command prints the target root, profile, state, audit log, imported agents, 
 #### Examples
 
 ```sh
-# Import the source defaults and portable authentication.
+# import the source defaults and portable authentication.
 openclaw devguard init .
 
-# Add two named agents.
+# add two named agents.
 openclaw devguard init . --agent ops --agent qa
 
-# Keep agent workspaces and identities without model or auth transfer.
+# keep agent workspaces and identities without model or auth transfer.
 openclaw devguard init . --agent ops --no-model-profile
 
-# Permit non-portable OAuth copying in a noninteractive environment.
+# permit non-portable oauth copying in a noninteractive environment.
 openclaw devguard init . --copy-oauth
 ```
 
@@ -396,16 +396,16 @@ The Gateway inherits the caller's environment, including environment-backed mode
 #### Examples
 
 ```sh
-# Supervise until interrupted.
+# supervise until interrupted.
 openclaw devguard run
 
-# Verify one build and stop.
+# verify one build and stop.
 openclaw devguard run --once
 
-# Allow extra time on a slow machine.
+# allow extra time on a slow machine.
 openclaw devguard run --startup-timeout 90
 
-# Observe detailed DevGuard and OpenClaw lifecycle diagnostics.
+# observe detailed devguard and openclaw lifecycle diagnostics.
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 ```
 
