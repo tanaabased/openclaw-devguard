@@ -5,6 +5,7 @@ export interface ProcessCommandOptions {
   env?: NodeJS.ProcessEnv;
   input?: string;
   inherit?: boolean;
+  inheritStdin?: boolean;
   allowFailure?: boolean;
 }
 
@@ -22,7 +23,7 @@ export default async function processCommand(
     cwd: options.cwd,
     env: options.env ?? process.env,
     stdio: [
-      options.input === undefined ? 'ignore' : 'pipe',
+      options.inheritStdin ? 'inherit' : options.input === undefined ? 'ignore' : 'pipe',
       options.inherit ? 'inherit' : 'pipe',
       options.inherit ? 'inherit' : 'pipe',
     ],

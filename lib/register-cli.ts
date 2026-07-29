@@ -1,4 +1,5 @@
 import doctorDevguard from '../cli/doctor.ts';
+import execDevguard from '../cli/exec.ts';
 import initDevguard from '../cli/init.ts';
 import profileDevguard from '../cli/profile.ts';
 import restoreDevguard from '../cli/restore.ts';
@@ -31,10 +32,11 @@ export interface RegisterDevguardCliOptions {
 export async function runCliAction(
   logger: Logger,
   context: string,
-  action: () => Promise<void>,
+  action: () => Promise<number | void>,
 ): Promise<void> {
   try {
-    await action();
+    const exitCode = await action();
+    if (typeof exitCode === 'number' && exitCode !== 0) process.exitCode = exitCode;
   } catch (error) {
     reportError(logger, context, error);
     process.exitCode = 1;
@@ -95,6 +97,21 @@ export default function registerDevguardCli(
     .action(async (pluginPath: unknown) => {
       await runCliAction(options.logger, 'profile lookup failed', async () => {
         await profileDevguard(typeof pluginPath === 'string' ? pluginPath : '.', { output });
+      });
+    });
+
+  devguard
+    .command('exec <openclaw-args...>')
+    .description('Run an OpenClaw command against initialized isolated state.')
+    .action(async (openClawArguments: unknown) => {
+      await runCliAction(options.logger, 'exec failed', async () => {
+        if (
+          !Array.isArray(openClawArguments) ||
+          openClawArguments.some((argument) => typeof argument !== 'string')
+        ) {
+          throw new TypeError('OpenClaw command arguments must be strings');
+        }
+        return execDevguard(process.cwd(), openClawArguments);
       });
     });
 
