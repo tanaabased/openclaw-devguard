@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/tanaabased/openclaw-devguard/releases"><img src="https://img.shields.io/github/v/release/tanaabased/openclaw-devguard?include_prereleases&sort=semver" alt="Latest release" /></a>
+  <a href="https://github.com/tanaabased/openclaw-devguard/releases"><img src="https://img.shields.io/github/v/release/tanaabased/openclaw-devguard" alt="Latest release" /></a>
   <a href="https://github.com/tanaabased/openclaw-devguard/actions/workflows/pr-examples-tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/tanaabased/openclaw-devguard/pr-examples-tests.yml?label=Leia" alt="Leia example tests" /></a>
   <img src="https://img.shields.io/badge/macOS-26%2B-111827" alt="macOS 26+" />
   <img src="https://img.shields.io/badge/Ubuntu-24.04-00c88a" alt="Ubuntu 24.04" />
@@ -28,7 +28,7 @@ Use DevGuard to:
 - watch, rebuild, validate, and restart the development Gateway as you edit
 - exercise advanced plugin surfaces such as lifecycle hooks, tool hooks, Gateway methods, and plugin-owned CLI commands through real OpenClaw flows
 - let earlier hooks observe or modify a tool request before DevGuard blocks its execution
-- inspect redacted tool attempts, rebuilds, and Gateway readiness, then restore the isolated environment when you are done
+- inspect recorded tool attempts with best-effort sensitive-data obfuscation, follow rebuilds and Gateway readiness, then restore the isolated environment when you are done
 
 See [ADVANCED.md](./ADVANCED.md) for the complete configuration and CLI references, profile-import details, logging behavior, and security boundary.
 
@@ -41,11 +41,15 @@ openclaw plugins install npm:@tanaab/openclaw-devguard
 openclaw plugins enable openclaw-devguard
 ```
 
+The normal profile exposes the DevGuard CLI but does not activate its tool policy. Capture and deny hooks run only inside a DevGuard-managed development Gateway.
+
 See [DEVELOPMENT.md](./DEVELOPMENT.md#install-from-source) when installing a linked source checkout.
 
 ## Usage
 
 In terminal 1, initialize the OpenClaw plugin you want to develop and start its supervised Gateway:
+
+`init` creates or reuses the project-owned `devguard.json`. Agent selections and OAuth consent remain machine-local; model configuration and usable authentication are imported by default, or can be skipped with `--no-model-profile`.
 
 ```sh
 cd /path/to/my-openclaw-plugin

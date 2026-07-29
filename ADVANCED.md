@@ -6,7 +6,7 @@ This guide contains DevGuard's less common operational details and complete conf
 
 ### Isolated Development Model
 
-DevGuard is installed once in the normal OpenClaw profile so that `openclaw devguard` is available. Initializing a target creates a stable native OpenClaw profile derived from the target's plugin ID and absolute repository path:
+DevGuard is installed once in the normal OpenClaw profile so that `openclaw devguard` is available. Its tool policy remains inactive in a normal Gateway; capture, deny, and status surfaces activate only in a DevGuard-managed development Gateway. Initializing a target creates a stable native OpenClaw profile derived from the target's plugin ID and absolute repository path:
 
 ```text
 normal OpenClaw profile: DevGuard CLI and source configuration
@@ -18,7 +18,7 @@ isolated OpenClaw profile: imported agents + DevGuard + linked target
 owned Gateway: build verification + tool-call capture and deny
 ```
 
-The target repository owns `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, and logs. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
+The target repository owns and should normally commit `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, and logs. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
 
 The absolute target path participates in the profile name and state key. Two checkouts of the same plugin therefore receive different isolated profiles, while repeated initialization of one checkout reuses the same profile.
 
@@ -42,13 +42,13 @@ The permissive OpenClaw exec setting is transport configuration, not DevGuard po
 
 This is a development guardrail, not arbitrary-code isolation. Target plugin imports, registration code, background workers, and direct Node.js filesystem or network access run in the Gateway process and are outside the tool hook. Imported workspaces are normal host paths. DevGuard does not provide command simulation, synthetic tool success, containers, VMs, or production policy enforcement. Use stronger host isolation for untrusted plugin code.
 
-Audit records are written as JSONL and contain correlated lifecycle and tool-policy events. Tool arguments, derived paths, identifiers, build metadata, and environment summaries are redacted. Environment values are omitted unless their exact non-secret names appear in `logging.environmentValueAllowlist`; credential-shaped names remain fully redacted even when allowlisted.
+Audit records are written as JSONL and contain correlated lifecycle and tool-policy events. DevGuard makes a best effort to obfuscate sensitive information, but it cannot identify every secret. Values under credential-shaped keys are replaced, and environment values are omitted unless their exact non-secret names appear in `logging.environmentValueAllowlist`; credential-shaped environment names remain fully redacted even when allowlisted. Ordinary tool arguments, including command text, derived paths, identifiers, and build metadata can remain visible. Treat audit logs as sensitive and avoid placing secrets in ordinary prompts or tool arguments.
 
 `restore` reverses only DevGuard-managed isolated-profile state. It does not change the normal source profile, imported workspaces, target source, audit logs, or side effects performed directly by target plugin code.
 
 ## Configuration Reference
 
-`openclaw devguard init` creates `devguard.json` in the target root when it does not exist and validates the existing file on later runs. The schema is strict: unknown keys, missing required values, invalid types, and invalid ports fail instead of receiving permissive defaults.
+`devguard.json` is DevGuard's sole public project configuration. `openclaw devguard init` creates it in the target root when it does not exist and validates the existing file on later runs. The schema is strict: unknown keys, missing required values, invalid types, and invalid ports fail instead of receiving permissive defaults.
 
 After initialization, `profile`, `exec`, `shell`, `run`, `tail`, `doctor`, and `restore` search the current directory and each parent for the nearest `devguard.json`. This allows those commands to run from a nested target directory. `init [plugin-path]` instead initializes the exact supplied directory, which defaults to the current directory.
 
@@ -200,7 +200,7 @@ All commands are registered beneath `openclaw devguard` by the DevGuard plugin i
 
 ### Common Command Behavior
 
-Except for `init`, commands discover the nearest target by walking upward to `devguard.json`. Commands that operate on isolated state also verify the machine-local initialization marker before continuing. Moving the repository or changing its absolute path changes its derived profile and requires initialization at the new location.
+Except for `init`, commands discover the nearest target by walking upward to `devguard.json`. `profile`, `exec`, `shell`, and `run` require a valid machine-local initialization marker. `doctor` reports marker failures alongside its other checks, `restore` validates a marker when one exists and otherwise reports the target unchanged, and `tail` reads the project log without requiring initialized state. Moving the repository or changing its absolute path changes its derived profile and requires initialization at the new location.
 
 DevGuard owns the OpenClaw selectors used for isolated operations. `exec`, `shell`, `run`, and internal diagnostic commands inherit the caller's environment, then replace `OPENCLAW_PROFILE`, `OPENCLAW_STATE_DIR`, and `OPENCLAW_CONFIG_PATH` with the initialized values and disable ambient channels. Source selectors still matter to `init` because they identify the normal OpenClaw profile from which agents and model settings are imported.
 

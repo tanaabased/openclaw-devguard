@@ -35,7 +35,7 @@ openclaw plugins inspect openclaw-devguard --runtime --json
 openclaw plugins doctor
 ```
 
-The uninstall step is intentionally optional. Do not remove an existing installation when it already points to the checkout you intend to develop.
+The uninstall step is intentionally optional. Do not remove an existing installation when it already points to the checkout you intend to develop. Enabling DevGuard in the normal profile exposes its CLI without activating tool policy in that profile's Gateway.
 
 ## Dogfood DevGuard
 
@@ -73,7 +73,7 @@ openclaw devguard exec -- agent \
 ```
 
 > [!IMPORTANT]
-> DevGuard deny mode blocks the exec request, so no child command runs and there is no final process environment to inspect. The first terminal can show diagnostics from the hook being developed. The DevGuard audit log proves that the agent attempted the tool and that DevGuard blocked it. If the change mutates tool arguments, log the hook's post-mutation view while developing; DevGuard's early capture record is not proof of the final would-be process environment.
+> DevGuard deny mode blocks the exec request, so no child command runs and there is no final process environment to inspect. The first terminal can show diagnostics from the hook being developed. The DevGuard audit log proves that the agent attempted the tool and that DevGuard blocked it. If the change mutates tool arguments, log the hook's post-mutation view while developing; DevGuard's early capture record is not proof of the final would-be process environment. Sensitive-data obfuscation is best effort, so treat audit logs as sensitive and expect ordinary tool arguments to remain visible.
 
 Inspect the recorded tool lifecycle and the live isolated environment while `run` remains active:
 
@@ -98,7 +98,7 @@ bun run dev:setup
 bun run dev
 ```
 
-`dev:setup` builds, links, and enables DevGuard in the OpenClaw development profile. `dev` rebuilds DevGuard and restarts a foreground development Gateway when watched source changes. Both commands mutate that development profile, so use them as explicit operational tasks rather than routine validation.
+`dev:setup` builds, links, and enables DevGuard in the OpenClaw development profile. `dev` rebuilds DevGuard and restarts a foreground development Gateway with DevGuard policy active when watched source changes. Both commands mutate that development profile, so use them as explicit operational tasks rather than routine validation.
 
 ## Testing
 
