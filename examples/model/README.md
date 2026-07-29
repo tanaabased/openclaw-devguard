@@ -38,6 +38,7 @@ unset OPENAI_API_KEY
 openclaw devguard init "$TMPDIR/plugin" > "$TMPDIR/init.log" 2>&1
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw config set agents.defaults.sandbox.mode off
 
 # should complete a live gateway turn with imported authentication
 unset OPENAI_API_KEY
