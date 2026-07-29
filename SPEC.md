@@ -130,6 +130,7 @@ Responsibilities:
 - enable the local plugin
 - enable the DevGuard plugin
 - configure fail-closed tool policy
+- keep the OpenClaw exec pipeline compatible with model transport so DevGuard's hook makes the terminal policy decision
 - disable OpenClaw Docker sandboxing
 - disable elevated execution
 - validate the target plugin
@@ -220,6 +221,7 @@ In default `deny` mode, checks should include:
 - ambient channels are disabled
 - OpenClaw Docker sandboxing is disabled
 - elevated tools are disabled
+- exec requests can reach DevGuard's hook pipeline
 - unknown tools are denied
 - DevGuard is loaded
 - the target plugin is linked and enabled
@@ -329,6 +331,7 @@ openclaw devguard run --mode allow
 - Unknown or malformed policy configuration resolves to `deny`.
 - Every mode uses real OpenClaw tool outcomes; no mode fabricates success.
 - `approve` and `allow` may cause real side effects and must say so clearly.
+- OpenClaw's base exec policy must not preempt DevGuard's capture and terminal policy hooks.
 - Mode-specific OpenClaw configuration must be internally consistent. DevGuard may not report that a call is approved or allowed while its own generated profile silently denies the same capability.
 
 ## Important Limitation: No Synthetic Tool Success
@@ -724,7 +727,7 @@ Effort-to-impact is qualitative:
 - parse only `deny`, `approve`, and `allow`
 - resolve missing, unknown, and malformed policy state to `deny`
 - expose the active mode through startup output, live Gateway status, logs, and `doctor`
-- generate coherent OpenClaw exec and elevated-tool settings without enabling Docker sandboxing
+- keep OpenClaw exec requests flowing through DevGuard's hooks while generating coherent elevated-tool settings without enabling Docker sandboxing
 - refuse readiness when the reported mode and generated profile disagree
 - keep `allow` run-scoped rather than silently persisted
 
