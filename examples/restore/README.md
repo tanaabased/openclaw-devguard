@@ -10,8 +10,7 @@ test -f "$DEVGUARD_PACKAGE"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$GITHUB_WORKSPACE"
-openclaw devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config file | sed "s|^~|$HOME|" > "$TMPDIR/config-path"
+openclaw devguard exec -- config file | sed "s|^~|$HOME|" > "$TMPDIR/config-path"
 test -s "$TMPDIR/config-path"
 
 # should remove state that devguard generated from an empty profile

@@ -29,6 +29,8 @@ openclaw plugins doctor
 # should expose the lightweight devguard command contract
 openclaw devguard --help | grep -F "init"
 openclaw devguard --help | grep -F "profile"
+openclaw devguard --help | grep -F "exec"
+openclaw devguard exec --help | grep -F "<openclaw-args...>"
 openclaw devguard --help | grep -F "run"
 openclaw devguard run --help | grep -F -- "--once"
 openclaw devguard run --help | grep -F -- "--startup-timeout <seconds>"

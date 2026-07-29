@@ -36,7 +36,6 @@ cp "$(cat "$TMPDIR/source-config-path")" "$TMPDIR/source-before.json"
 # should initialize devguard with the source model profile
 unset OPENAI_API_KEY
 openclaw devguard init "$GITHUB_WORKSPACE" > "$TMPDIR/init.log" 2>&1
-openclaw devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
 find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
 dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
@@ -64,7 +63,7 @@ if grep -Fq "$OPENAI_API_KEY" "$TMPDIR/init.log"; then exit 1; fi
 # should return the live model response
 set -o pipefail
 unset OPENAI_API_KEY
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json | grep -F "DEVGUARD_MODEL_OK"
+openclaw devguard exec -- agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json | grep -F "DEVGUARD_MODEL_OK"
 ```
 
 ## Cleanup

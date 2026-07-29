@@ -23,6 +23,7 @@ jobs:
         example:
           - install
           - init
+          - exec
           - run
           - tail
           - doctor

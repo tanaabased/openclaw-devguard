@@ -13,7 +13,7 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Reuse a repository-owned product asset directly when it is itself the test input; do not duplicate it as an example-only fixture.
 - Keep real product registration, onboarding, and mutation commands when their supported behavior is part of the scenario contract; use fixtures to prepare inputs, not to bypass the public surface under test.
 - Use the fresh runner's default OpenClaw profile for source setup unless named-profile behavior is itself under test.
-- Select DevGuard's initialized isolated state through its public profile output or isolated-state commands; do not set `OPENCLAW_STATE_DIR` directly in a scenario.
+- Use `openclaw devguard exec -- ...` for native OpenClaw commands against initialized isolated state; reserve `devguard profile` for scenarios that specifically test profile output, and do not set `OPENCLAW_STATE_DIR` directly.
 - Prefer direct `command | grep` assertions when one required command invocation has one output assertion; command cost alone is not a reason to persist its output.
 - Capture command output only when the same invocation must support multiple assertions, a full-output or non-leak check, detaching or later inspecting a background process, or an output artifact that is itself the contract.
 - Inspect DevGuard's existing logs directly when they are the observable lifecycle or safety record; do not duplicate command output into a temporary log merely to grep it.

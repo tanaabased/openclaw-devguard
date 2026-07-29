@@ -35,8 +35,7 @@ cp "$(cat "$TMPDIR/source-config-path")" "$TMPDIR/source-before.json"
 
 # should initialize devguard with both agents and no model transfer
 openclaw devguard init "$GITHUB_WORKSPACE" --agent picard --agent riker --no-model-profile > "$TMPDIR/init.log" 2>&1
-openclaw devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config file | sed "s|^~|$HOME|" > "$TMPDIR/config-path"
+openclaw devguard exec -- config file | sed "s|^~|$HOME|" > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
 dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
@@ -54,18 +53,18 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 # should retain the source workspaces and reproduce both identities only in isolated state
 set -o pipefail
 cmp "$TMPDIR/source-before.json" "$(cat "$TMPDIR/source-config-path")"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[0].id' --json | grep -F '"main"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[0].default' --json | grep -F 'true'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[1].id' --json | grep -F '"picard"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[1].identity.name' --json | grep -F '"Jean-Luc Picard"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[1].workspace' --json | grep -F "$TMPDIR/source-picard"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[1].agentDir' --json | grep -F "$(cat "$TMPDIR/state-path")/agents/picard/agent"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[2].id' --json | grep -F '"riker"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[2].identity.name' --json | grep -F '"William T. Riker"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[2].workspace' --json | grep -F "$TMPDIR/source-riker"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get 'agents.list[2].agentDir' --json | grep -F "$(cat "$TMPDIR/state-path")/agents/riker/agent"
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get ui.assistant.name --json | grep -F '"DEVGUARD"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config get ui.assistant.avatar --json | grep -Fq '"data:image/png;base64,'
+openclaw devguard exec -- config get 'agents.list[0].id' --json | grep -F '"main"'
+openclaw devguard exec -- config get 'agents.list[0].default' --json | grep -F 'true'
+openclaw devguard exec -- config get 'agents.list[1].id' --json | grep -F '"picard"'
+openclaw devguard exec -- config get 'agents.list[1].identity.name' --json | grep -F '"Jean-Luc Picard"'
+openclaw devguard exec -- config get 'agents.list[1].workspace' --json | grep -F "$TMPDIR/source-picard"
+openclaw devguard exec -- config get 'agents.list[1].agentDir' --json | grep -F "$(cat "$TMPDIR/state-path")/agents/picard/agent"
+openclaw devguard exec -- config get 'agents.list[2].id' --json | grep -F '"riker"'
+openclaw devguard exec -- config get 'agents.list[2].identity.name' --json | grep -F '"William T. Riker"'
+openclaw devguard exec -- config get 'agents.list[2].workspace' --json | grep -F "$TMPDIR/source-riker"
+openclaw devguard exec -- config get 'agents.list[2].agentDir' --json | grep -F "$(cat "$TMPDIR/state-path")/agents/riker/agent"
+openclaw devguard exec -- config get ui.assistant.name --json | grep -F '"DEVGUARD"'
+openclaw devguard exec -- config get ui.assistant.avatar --json | grep -Fq '"data:image/png;base64,'
 
 # should report all agents and the disabled model transfer
 set -o pipefail
@@ -75,19 +74,19 @@ grep -F "auth" "$TMPDIR/init.log" | grep -F "not imported"
 
 # should expose both identities through the live gateway
 set -o pipefail
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call agents.list --json > "$TMPDIR/agents-list.json"
+openclaw devguard exec -- gateway call agents.list --json > "$TMPDIR/agents-list.json"
 grep -F '"defaultId"' "$TMPDIR/agents-list.json" | grep -F '"main"'
 grep -F '"id"' "$TMPDIR/agents-list.json" | grep -F '"picard"'
 grep -F '"id"' "$TMPDIR/agents-list.json" | grep -F '"riker"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call agent.identity.get --json --params '{"agentId":"main"}' > "$TMPDIR/main-identity.json"
+openclaw devguard exec -- gateway call agent.identity.get --json --params '{"agentId":"main"}' > "$TMPDIR/main-identity.json"
 grep -F '"agentId"' "$TMPDIR/main-identity.json" | grep -F '"main"'
 grep -F '"name"' "$TMPDIR/main-identity.json" | grep -F '"DEVGUARD"'
 grep -F '"avatarStatus"' "$TMPDIR/main-identity.json" | grep -F '"data"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call agent.identity.get --json --params '{"agentId":"picard"}' > "$TMPDIR/picard-identity.json"
+openclaw devguard exec -- gateway call agent.identity.get --json --params '{"agentId":"picard"}' > "$TMPDIR/picard-identity.json"
 grep -F '"agentId"' "$TMPDIR/picard-identity.json" | grep -F '"picard"'
 grep -F '"name"' "$TMPDIR/picard-identity.json" | grep -F '"Jean-Luc Picard"'
 grep -F '"avatarStatus"' "$TMPDIR/picard-identity.json" | grep -F '"local"'
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call agent.identity.get --json --params '{"agentId":"riker"}' > "$TMPDIR/riker-identity.json"
+openclaw devguard exec -- gateway call agent.identity.get --json --params '{"agentId":"riker"}' > "$TMPDIR/riker-identity.json"
 grep -F '"agentId"' "$TMPDIR/riker-identity.json" | grep -F '"riker"'
 grep -F '"name"' "$TMPDIR/riker-identity.json" | grep -F '"William T. Riker"'
 grep -F '"avatarStatus"' "$TMPDIR/riker-identity.json" | grep -F '"local"'

@@ -19,7 +19,6 @@ set -o pipefail
 openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "created"
 set -o pipefail
 openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "reused"
-openclaw devguard profile "$TMPDIR/plugin" > "$TMPDIR/devguard-profile"
 find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
 dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
@@ -42,17 +41,17 @@ grep -F "pass" "$TMPDIR/doctor.log" | grep -F "target plugin id"
 grep -F "pass" "$TMPDIR/doctor.log" | grep -F "live target plugin"
 
 # should block exec through the live openclaw policy chain
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call devguard-example.attempt-tool --json --params '{"toolName":"exec"}' > "$TMPDIR/exec-result.json"
+(cd "$TMPDIR/plugin" && openclaw devguard exec -- gateway call devguard-example.attempt-tool --json --params '{"toolName":"exec"}') > "$TMPDIR/exec-result.json"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-blocked "$TMPDIR/exec-result.json"
 test ! -e "$TMPDIR/exec-sentinel"
 
 # should block filesystem mutation through the live openclaw policy chain
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call devguard-example.attempt-tool --json --params '{"toolName":"write"}' > "$TMPDIR/write-result.json"
+(cd "$TMPDIR/plugin" && openclaw devguard exec -- gateway call devguard-example.attempt-tool --json --params '{"toolName":"write"}') > "$TMPDIR/write-result.json"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-blocked "$TMPDIR/write-result.json"
 test ! -e "$TMPDIR/write-sentinel"
 
 # should deny unknown tools and record redacted correlated decisions
-openclaw --profile "$(cat "$TMPDIR/devguard-profile")" gateway call devguard-example.attempt-tool --json --params '{"toolName":"totally-unknown-tool"}' > "$TMPDIR/unknown-result.json"
+(cd "$TMPDIR/plugin" && openclaw devguard exec -- gateway call devguard-example.attempt-tool --json --params '{"toolName":"totally-unknown-tool"}') > "$TMPDIR/unknown-result.json"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-blocked "$TMPDIR/unknown-result.json"
 test ! -e "$TMPDIR/totally-unknown-tool-sentinel"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-deny-log "$(cat "$TMPDIR/log-path")"
