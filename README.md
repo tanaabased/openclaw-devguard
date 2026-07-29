@@ -16,7 +16,7 @@ OpenClaw DevGuard is a third-party development plugin that builds another OpenCl
 > Requires OpenClaw 2026.7.1-2 or newer.
 
 > [!WARNING]
-> DevGuard protects the tool-call pipeline. It does not isolate plugin imports, registration code, background workers, or direct filesystem and network access. Use a VM or container for untrusted code.
+> DevGuard is intended for development profiles that run with OpenClaw Docker sandboxing off, and it configures its isolated profile that way. It protects the tool-call pipeline but does not isolate plugin imports, registration code, background workers, or direct filesystem and network access. Workflows that require OpenClaw's Docker sandbox are not currently supported; use a separate VM or container for untrusted code.
 
 ## Overview
 

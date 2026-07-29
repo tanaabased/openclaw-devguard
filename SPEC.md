@@ -130,8 +130,7 @@ Responsibilities:
 - enable the local plugin
 - enable the DevGuard plugin
 - configure fail-closed tool policy
-- enable OpenClaw sandboxing where available
-- default workspace access to `none`
+- disable OpenClaw Docker sandboxing
 - disable elevated execution
 - validate the target plugin
 - inspect the target plugin's runtime registration
@@ -219,8 +218,7 @@ In default `deny` mode, checks should include:
 - the expected project-specific isolated state is active
 - the normal production profile is not being mutated
 - ambient channels are disabled
-- sandbox mode is enabled where supported
-- workspace access is `none`
+- OpenClaw Docker sandboxing is disabled
 - elevated tools are disabled
 - unknown tools are denied
 - DevGuard is loaded
@@ -319,7 +317,7 @@ openclaw devguard run --mode allow
 
 - record and redact the attempted call
 - permit the real tool call without a DevGuard approval prompt
-- retain independent OpenClaw policy, sandbox, and tool behavior
+- keep OpenClaw Docker sandboxing disabled and retain independent OpenClaw tool behavior
 - block rather than execute when required audit logging fails
 - require a conspicuous run-scoped selection
 - surface the active mode in startup output, live status, logs, and `doctor`
@@ -588,7 +586,6 @@ The output should clearly separate:
 - plugin registration errors
 - Gateway startup errors
 - DevGuard policy decisions
-- OpenClaw sandbox failures
 
 ## Fail-Closed Requirements
 
@@ -600,7 +597,7 @@ Examples:
 
 - If DevGuard fails to register its hook, startup should fail.
 - If the target plugin registers an unknown tool, it should be denied by default.
-- If sandbox configuration cannot be applied, `doctor` should fail prominently.
+- If OpenClaw Docker sandboxing is unexpectedly enabled, `doctor` should fail prominently.
 - If the wrong OpenClaw profile is active, `run` should refuse to proceed unless explicitly overridden.
 - If configuration parsing fails, no permissive defaults should be assumed.
 - If redaction fails, the affected value should be omitted rather than logged.
@@ -727,7 +724,7 @@ Effort-to-impact is qualitative:
 - parse only `deny`, `approve`, and `allow`
 - resolve missing, unknown, and malformed policy state to `deny`
 - expose the active mode through startup output, live Gateway status, logs, and `doctor`
-- generate coherent OpenClaw exec, sandbox, workspace, and elevated-tool settings for the selected mode
+- generate coherent OpenClaw exec and elevated-tool settings without enabling Docker sandboxing
 - refuse readiness when the reported mode and generated profile disagree
 - keep `allow` run-scoped rather than silently persisted
 
@@ -850,7 +847,8 @@ These items are intentionally not candidates on the path to `1.0.0`:
 18. OpenClaw public-contract incompatibilities fail with actionable diagnostics.
 19. `restore` returns DevGuard-managed profile configuration to its prior state while preserving logs.
 20. CI-first operational scenarios cover the default deny path and every real-execution mode without relying on the developer's normal OpenClaw profile.
-21. Documentation clearly explains real side effects in `approve` and `allow`, direct target-plugin host access, and every excluded product boundary.
+21. DevGuard keeps OpenClaw Docker sandboxing off, and documentation identifies Docker-sandbox-dependent workflows as unsupported.
+22. Documentation clearly explains real side effects in `approve` and `allow`, direct target-plugin host access, and every excluded product boundary.
 
 ## Product Positioning
 

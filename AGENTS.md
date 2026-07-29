@@ -11,6 +11,7 @@
 - Treat agent-requested tool activity as untrusted and target plugin code as developer-controlled. Keep DevGuard focused on supervising developer-controlled OpenClaw plugin workflows through public OpenClaw lifecycle, inspection, diagnostic, and tool-policy APIs.
 - DevGuard may capture, deny, request native OpenClaw approval for, or explicitly pass through real tool calls. Deny must remain the default; approval and allow behavior must be explicit, auditable, visibly surfaced, and fail closed when configuration, approval routing, or audit logging fails.
 - Do not expand DevGuard into an arbitrary-code isolation or simulation platform. Container or VM orchestration, direct Node.js API interception, synthetic tool success, command simulation, fixture or replay engines, production policy enforcement, and remote or multi-user runtime management are out of scope unless the project is explicitly rechartered.
+- Keep OpenClaw Docker sandboxing disabled in generated profiles and operational tests. DevGuard must not require, build, or manage container images as part of its safety model.
 - Prefer real OpenClaw execution outcomes and clearly stated limitations over fake success, permissive fallbacks, or partial isolation claims.
 
 ## Runtime and tooling

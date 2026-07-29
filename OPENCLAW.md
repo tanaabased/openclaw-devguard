@@ -34,7 +34,7 @@ The target must contain `package.json`, `openclaw.plugin.json`, and a `build` or
 - imports the source default agent, effective model selection, and portable authentication
 - resolves additional `--agent` selections from the source profile
 - configures a token-authenticated loopback Gateway with channels skipped
-- denies exec and elevated tools and removes sandbox workspace access
+- disables OpenClaw Docker sandboxing, exec, and elevated tools
 - builds the target
 - runs the inferred validation command
 - installs and enables DevGuard and the linked target in the isolated profile
@@ -68,6 +68,8 @@ The generated configuration is deliberately strict:
 ```
 
 Change `build`, `validate`, `watch`, or `gateway.port` when the inferred defaults do not fit. The schema rejects unknown keys. Use different ports when supervising multiple targets concurrently. Set `DEVGUARD_HOME` to move the parent directory for project state.
+
+DevGuard explicitly sets `agents.defaults.sandbox.mode` to `off`. It does not require, build, or manage OpenClaw Docker sandbox images, and workflows that require OpenClaw's Docker sandbox are not currently supported. Deny mode is enforced by DevGuard's fail-closed tool hook; it is not a container-isolation claim. Target plugin code remains developer-controlled and runs in the Gateway process.
 
 ## Import Models And Agents
 
