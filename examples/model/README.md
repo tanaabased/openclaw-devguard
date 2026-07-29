@@ -25,8 +25,8 @@ openclaw onboard --non-interactive --accept-risk \
   --skip-search \
   --skip-skills \
   --skip-ui \
-  --suppress-gateway-token-output > "$TMPDIR/onboard.log" 2>&1
-openclaw models set "openai/$OPENAI_MODEL" >> "$TMPDIR/onboard.log" 2>&1
+  --suppress-gateway-token-output
+openclaw models set "openai/$OPENAI_MODEL"
 
 # should install and enable packed devguard in the source profile
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
@@ -38,13 +38,14 @@ unset OPENAI_API_KEY
 openclaw devguard init "$TMPDIR/plugin" > "$TMPDIR/init.log" 2>&1
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
+dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
+printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
-# should complete a live gateway turn with imported authentication
+# should start a live gateway with imported authentication
 unset OPENAI_API_KEY
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 90 "$(cat "$TMPDIR/run.pid")"
-OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json > "$TMPDIR/live-response.json"
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 90 "$(cat "$TMPDIR/run.pid")"
 ```
 
 ## Testing
@@ -55,13 +56,16 @@ cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
 node "$GITHUB_WORKSPACE/scripts/leia-profile-cli.mjs" assert-model "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
 
 # should report the imported model without exposing credential material
-grep -F "agents       main" "$TMPDIR/init.log"
-grep -F "model        openai/$OPENAI_MODEL" "$TMPDIR/init.log"
-grep -F "auth         1 copied" "$TMPDIR/init.log"
+set -o pipefail
+grep -F "agents" "$TMPDIR/init.log" | grep -F "main"
+grep -F "model" "$TMPDIR/init.log" | grep -F "openai/$OPENAI_MODEL"
+grep -F "auth" "$TMPDIR/init.log" | grep -F "1 copied"
 if grep -Fq "$OPENAI_API_KEY" "$TMPDIR/init.log"; then exit 1; fi
 
 # should return the live model response
-grep -F "DEVGUARD_MODEL_OK" "$TMPDIR/live-response.json"
+set -o pipefail
+unset OPENAI_API_KEY
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json | grep -F "DEVGUARD_MODEL_OK"
 ```
 
 ## Cleanup

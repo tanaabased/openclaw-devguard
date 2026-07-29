@@ -15,7 +15,7 @@ find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TM
 test -s "$TMPDIR/config-path"
 
 # should remove state that devguard generated from an empty profile
-(cd "$TMPDIR/plugin" && openclaw devguard restore) > "$TMPDIR/restore-generated.log"
+(cd "$TMPDIR/plugin" && openclaw devguard restore)
 test ! -e "$(cat "$TMPDIR/config-path")"
 
 # should initialize over an existing development profile config
@@ -29,14 +29,14 @@ openclaw devguard init "$TMPDIR/plugin"
 
 ```bash
 # should restore the saved config and preserve the append-only log
-(cd "$TMPDIR/plugin" && openclaw devguard restore) > "$TMPDIR/restore-snapshot.log"
+set -o pipefail
+(cd "$TMPDIR/plugin" && openclaw devguard restore) | grep -F "logs" | grep -F "preserved"
 cmp "$TMPDIR/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
 find "$DEVGUARD_HOME/projects" -path '*/logs/events.jsonl' -print -quit > "$TMPDIR/log-path"
 grep -F '"event":"configuration_restored"' "$(cat "$TMPDIR/log-path")"
-grep -F "logs         preserved" "$TMPDIR/restore-snapshot.log"
 
 # should make repeated restore a successful no-op
-(cd "$TMPDIR/plugin" && openclaw devguard restore) > "$TMPDIR/restore-again.log"
-grep -F "unchanged    devguard-example" "$TMPDIR/restore-again.log"
+set -o pipefail
+(cd "$TMPDIR/plugin" && openclaw devguard restore) | grep -F "unchanged" | grep -F "devguard-example"
 cmp "$TMPDIR/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
 ```

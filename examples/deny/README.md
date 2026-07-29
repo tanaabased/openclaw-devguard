@@ -13,11 +13,13 @@ openclaw plugins enable openclaw-devguard
 openclaw devguard init "$TMPDIR/plugin"
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
+dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
+printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start a verified supervised gateway
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 60
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 60 "$(cat "$TMPDIR/run.pid")"
 ```
 
 ## Testing
@@ -37,7 +39,6 @@ test ! -e "$TMPDIR/write-sentinel"
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw gateway call devguard-example.attempt-tool --json --params '{"toolName":"totally-unknown-tool"}' > "$TMPDIR/unknown-result.json"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-blocked "$TMPDIR/unknown-result.json"
 test ! -e "$TMPDIR/totally-unknown-tool-sentinel"
-find "$DEVGUARD_HOME/projects" -path '*/logs/events.jsonl' -print -quit > "$TMPDIR/log-path"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-deny-log "$(cat "$TMPDIR/log-path")"
 
 # should stop supervision cleanly

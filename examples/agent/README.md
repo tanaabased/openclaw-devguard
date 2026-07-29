@@ -29,7 +29,8 @@ cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
 node "$GITHUB_WORKSPACE/scripts/leia-profile-cli.mjs" assert-agent "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
 
 # should report both agents and the disabled model transfer
-grep -F "agents       main, ops" "$TMPDIR/init.log"
-grep -F "model        not imported" "$TMPDIR/init.log"
-grep -F "auth         not imported" "$TMPDIR/init.log"
+set -o pipefail
+grep -F "agents" "$TMPDIR/init.log" | grep -F "main, ops"
+grep -F "model" "$TMPDIR/init.log" | grep -F "not imported"
+grep -F "auth" "$TMPDIR/init.log" | grep -F "not imported"
 ```

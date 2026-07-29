@@ -11,11 +11,14 @@ cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$TMPDIR/plugin"
+find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
+dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
+printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start the first verified plugin build
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 60
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 60 "$(cat "$TMPDIR/run.pid")"
 ```
 
 ## Testing
@@ -23,8 +26,7 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" 
 ```bash
 # should rebuild and verify a replacement gateway after a watched edit
 printf '\n// leia rebuild\n' >> "$TMPDIR/plugin/index.ts"
-node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 2 60
-find "$DEVGUARD_HOME/projects" -path '*/logs/events.jsonl' -print -quit > "$TMPDIR/log-path"
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 2 60 "$(cat "$TMPDIR/run.pid")"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-restart-log "$(cat "$TMPDIR/log-path")"
 
 # should stop supervision cleanly
