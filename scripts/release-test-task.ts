@@ -67,7 +67,7 @@ try {
     'lib/logger.ts',
     'lib/register-cli.ts',
     'README.md',
-    'OPENCLAW.md',
+    'ADVANCED.md',
     'DEVELOPMENT.md',
     'CHANGELOG.md',
     'LICENSE',

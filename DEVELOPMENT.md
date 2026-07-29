@@ -1,6 +1,6 @@
 # Development
 
-This guide covers developing, testing, dogfooding, and releasing DevGuard itself. Start with the [README](./README.md) when using DevGuard with another plugin, and use [OPENCLAW.md](./OPENCLAW.md) for the complete runtime workflow.
+This guide covers installing, developing, testing, and dogfooding DevGuard itself. Start with the [README](./README.md) when using DevGuard with another plugin, and use [ADVANCED.md](./ADVANCED.md) for the complete runtime and reference material.
 
 ## Requirements
 
@@ -10,11 +10,153 @@ This guide covers developing, testing, dogfooding, and releasing DevGuard itself
 
 OpenClaw does not support running the Gateway under Bun. The build remains Node-targeted ESM with external package dependencies left external.
 
-## Setup
+## Install From Source
+
+Install a linked development checkout in the normal OpenClaw profile:
 
 ```sh
+# Clone the repository and install its pinned dependencies.
+git clone https://github.com/tanaabased/openclaw-devguard.git
+cd openclaw-devguard
 bun install
+
+# Build the Node-targeted plugin.
+bun run build
+
+# If OpenClaw reports a conflicting installation, remove it before linking.
+# openclaw plugins uninstall openclaw-devguard --force
+
+# Link and enable this checkout in the normal OpenClaw profile.
+openclaw plugins install --link .
+openclaw plugins enable openclaw-devguard
+
+# Confirm that OpenClaw can load the development build.
+openclaw plugins inspect openclaw-devguard --runtime --json
+openclaw plugins doctor
 ```
+
+The uninstall step is intentionally optional. Do not remove an existing installation when it already points to the checkout you intend to develop.
+
+## Dogfood DevGuard
+
+The primary development workflow makes DevGuard both the installed guard and the target plugin under supervision. Run the workflow from the repository root after completing the source installation.
+
+Initialize the checkout and import an agent you can use for a live turn:
+
+```sh
+# Replace my-agent with an agent configured in your normal OpenClaw profile.
+openclaw devguard init . --agent my-agent
+```
+
+The selected agent must exist in the source profile. A live model-backed turn also requires usable model configuration and authentication in that profile so `init` can project them into isolated state.
+
+Start the supervised Gateway in the first terminal:
+
+```sh
+OPENCLAW_LOG_LEVEL=debug openclaw devguard run
+```
+
+This foreground process builds and validates DevGuard, starts its isolated Gateway, reports DevGuard and target-plugin diagnostics, and watches the configured source paths. Saving a change triggers another build; the active Gateway is replaced only after the new build and validation succeed.
+
+For example, suppose the change under development adds or inspects `DEVGUARD_EXAMPLE=1` on exec tool requests. Add a temporary debug log at the point where the hook observes or changes the request, save the source, and wait for the first terminal to report the replacement Gateway as ready.
+
+In a second terminal, ask the imported agent to make an exec request:
+
+```sh
+cd /path/to/openclaw-devguard
+
+openclaw devguard exec -- agent \
+  --agent my-agent \
+  --session-key devguard-dogfood \
+  --message "Use the exec tool to print the value of DEVGUARD_EXAMPLE." \
+  --json
+```
+
+> [!IMPORTANT]
+> DevGuard deny mode blocks the exec request, so no child command runs and there is no final process environment to inspect. The first terminal can show diagnostics from the hook being developed. The DevGuard audit log proves that the agent attempted the tool and that DevGuard blocked it. If the change mutates tool arguments, log the hook's post-mutation view while developing; DevGuard's early capture record is not proof of the final would-be process environment.
+
+Inspect the recorded tool lifecycle and the live isolated environment while `run` remains active:
+
+```sh
+# Read the current complete audit records without following.
+openclaw devguard tail --no-follow
+
+# Verify the isolated profile, target build, and deny hook.
+openclaw devguard doctor
+```
+
+Stop supervision with `Ctrl-C`. Restoring is optional between development sessions; when needed, run it only after supervision has stopped:
+
+```sh
+openclaw devguard restore
+```
+
+For lower-level work that cannot yet use the product-facing dogfood path, DevGuard also supports OpenClaw's built-in `--dev` profile:
+
+```sh
+bun run dev:setup
+bun run dev
+```
+
+`dev:setup` builds, links, and enables DevGuard in the OpenClaw development profile. `dev` rebuilds DevGuard and restarts a foreground development Gateway when watched source changes. Both commands mutate that development profile, so use them as explicit operational tasks rather than routine validation.
+
+## Testing
+
+Run the narrowest relevant check while iterating, then complete the repository-only suite before handoff.
+
+### Linting And Type Checking
+
+[ESLint](https://eslint.org/) checks JavaScript and TypeScript behavior, [Prettier](https://prettier.io/) checks formatting, and [TypeScript](https://www.typescriptlang.org/) checks the root, development-script, and test runtime boundaries:
+
+```sh
+bun run lint
+bun run typecheck
+```
+
+`bun run lint` runs both ESLint and the Prettier formatting check.
+
+### Unit Tests
+
+The default test suite uses [Mocha](https://mochajs.org/) and keeps behavior-focused specifications flat in [`test/`](./test/):
+
+```sh
+bun run test
+```
+
+Test DevGuard's adapter decisions and public contracts without duplicating OpenClaw's own library coverage.
+
+### Watcher Integration
+
+Filesystem notifications and process timing stay outside the default unit suite. Run the focused integration check only when watcher behavior is directly in scope:
+
+```sh
+bun run test:integration
+```
+
+### Build And Package Validation
+
+Build the Node-targeted runtime, validate the OpenClaw plugin contract, and inspect the release-shaped package when those surfaces are in scope:
+
+```sh
+bun run build
+bun run plugin:check
+bun run test:release
+```
+
+The release-package check builds the plugin, validates its metadata, creates an npm archive, and confirms that the required runtime, manifest, source, CLI, library, asset, and documentation files are present.
+
+### Leia Scenarios
+
+The [Leia](https://github.com/lando/leia) scenarios under [`examples/`](./examples/) run as matrix entries in the [example-test workflow](./.github/workflows/pr-examples-tests.yml) on macOS and Ubuntu. Most dogfood DevGuard's self-target path; the [`plugin`](./examples/plugin/) scenario owns the separate external-plugin boundary.
+
+> [!WARNING]
+> Leia scenarios install plugins, initialize OpenClaw profiles, start Gateways, invoke models, and remove generated state. They are designed for isolated GitHub Actions runners and should not be run as routine local validation.
+
+Keep operational and end-to-end evidence in that workflow rather than reproducing it with direct local OpenClaw commands.
+
+## Coding Standards
+
+DevGuard follows the shared JavaScript, CLI, documentation, and Leia conventions in the [Tanaab Canon repository](https://github.com/tanaabased/canon). The repository's [AGENTS.md](./AGENTS.md) adds DevGuard-specific product, OpenClaw, test, and validation boundaries.
 
 Repository ownership is intentionally direct:
 
@@ -27,87 +169,4 @@ Repository ownership is intentionally direct:
 | `scripts/` | Development and release tasks               |
 | `test/`    | Flat behavior-focused unit tests            |
 
-## Routine Validation
-
-```sh
-bun run lint
-bun run typecheck
-bun run test
-bun run build
-bun run plugin:check
-```
-
-Run the narrowest relevant check first while iterating, then complete this repository-only suite before handoff.
-
-Filesystem notification behavior is kept outside the default unit suite. Run its focused integration check only when watcher behavior is directly in scope:
-
-```sh
-bun run test:integration
-```
-
-## Live Development
-
-The lower-level loop develops DevGuard in OpenClaw's built-in `--dev` profile:
-
-```sh
-bun run dev:setup
-bun run dev
-```
-
-`dev:setup` builds, links, and enables DevGuard in that profile. `dev` rebuilds DevGuard and restarts a foreground development Gateway when watched source changes. Both commands run OpenClaw and mutate its development profile, so they are opt-in operational tasks.
-
-To dogfood the product-facing workflow instead:
-
-```sh
-bun run build
-openclaw plugins install --link .
-openclaw plugins enable openclaw-devguard
-openclaw devguard init .
-OPENCLAW_LOG_LEVEL=debug openclaw devguard run
-```
-
-This makes DevGuard both the guard and the target. Developing another plugin follows the per-target flow in [OPENCLAW.md](./OPENCLAW.md#development-model).
-
-## Package Validation
-
-```sh
-bun run test:release
-```
-
-The release package test builds the plugin, validates its metadata, creates an npm archive, and confirms that the required runtime, manifest, source, CLI, and library files are present.
-
-## Operational Scenarios
-
-The CI-first Leia scenarios under [`examples/`](./examples/) run as entries in the existing macOS and Ubuntu example matrix. They cover:
-
-Most scenarios dogfood the repository through DevGuard's supported self-target path. The [`plugin`](./examples/plugin/) scenario owns the separate example plugin and should grow with real external-plugin tools, hooks, configuration, and lifecycle flows that do not belong in the published DevGuard plugin.
-
-- packed installation and CLI discovery
-- repeated target initialization
-- one bounded supervised run
-- human and JSON event tailing
-- aggregate live safety diagnostics
-- generated-state removal and saved-config restoration
-- watched rebuild and verified Gateway replacement
-- live exec, write, and unknown-tool denial with audit redaction and correlation
-- source model and portable authentication import
-- selected agent workspace resolution with isolated agent and session state
-- native source and DevGuard profile selection without direct state-directory overrides
-
-Do not run direct OpenClaw commands, plugin installation, Gateway startup, or Leia scenarios as routine local validation. Keep these machine-mutating operational and end-to-end checks in the pull-request workflow matrix.
-
-The manually dispatched `Live model test` workflow reuses the `model` Leia scenario for one real isolated-Gateway turn. It requires `TANAAB_ALTERNATE_MALE_KEY` and accepts the OpenAI model reference as a workflow input; it is not a pull-request gate.
-
-## Release Model
-
-GitHub Releases drive npm publishing. Stable releases publish to `latest`; prereleases publish to `edge`. npm trusted publishing owns publication, while repository secrets are scoped to dist-tag and release synchronization.
-
-## Documentation Ownership
-
-- `README.md` owns the common install, target initialization, first run, and verification path.
-- `OPENCLAW.md` owns the complete OpenClaw integration, CLI, configuration, logging, and operational workflow.
-- `DEVELOPMENT.md` owns contributor setup, validation, dogfooding, and release mechanics.
-- `SPEC.md` owns product intent and the threat model, not implementation status.
-- `CHANGELOG.md` records implemented changes.
-
-Keep commands and status claims aligned with the repository before documenting them as functional.
+Keep implementation in its nearest owning scope, prefer direct public CLI and Gateway checks in Leia examples, and verify visible behavior before documenting a feature as functional.

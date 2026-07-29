@@ -1,0 +1,490 @@
+# Advanced
+
+This guide contains DevGuard's less common operational details and complete configuration and CLI references. Start with the [README](./README.md) for installation and the primary workflow; use [DEVELOPMENT.md](./DEVELOPMENT.md) when changing DevGuard itself.
+
+## Advanced Usage
+
+### Isolated Development Model
+
+DevGuard is installed once in the normal OpenClaw profile so that `openclaw devguard` is available. Initializing a target creates a stable native OpenClaw profile derived from the target's plugin ID and absolute repository path:
+
+```text
+normal OpenClaw profile: DevGuard CLI and source configuration
+             |
+target repository: devguard.json and plugin source
+             |
+isolated OpenClaw profile: imported agents + DevGuard + linked target
+             |
+owned Gateway: build verification + tool-call capture and deny
+```
+
+The target repository owns `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, and logs. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
+
+The absolute target path participates in the profile name and state key. Two checkouts of the same plugin therefore receive different isolated profiles, while repeated initialization of one checkout reuses the same profile.
+
+Agent selections and OAuth-copy consent are machine-local initialization state, not portable project policy, so they are not written to `devguard.json`. The normal source profile is read but not mutated. Imported workspaces remain references to their existing directories; DevGuard creates fresh isolated agent state and does not copy source sessions, channel bindings, browser state, or general OpenClaw configuration.
+
+Initialization always makes `main` the isolated default agent. It also imports the source profile's configured default agent when that is a different ID, plus every agent selected with `--agent`. Configured agent identities are projected into the isolated profile. When an agent has no configured identity but its workspace contains `IDENTITY.md`, DevGuard asks OpenClaw to set that identity only in the isolated profile. The fallback Control UI identity is `DEVGUARD` with the bundled DevGuard avatar, making the isolated Gateway visually distinct.
+
+### Supervision And Safety
+
+`run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard deny hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
+
+DevGuard deliberately configures the isolated profile with:
+
+- `agents.defaults.sandbox.mode` set to `off`
+- elevated tools disabled
+- `tools.exec.mode` set to `full`
+- ambient channels skipped for DevGuard-managed OpenClaw processes
+- a loopback Gateway protected by a generated token
+
+The permissive OpenClaw exec setting is transport configuration, not DevGuard policy. It allows model transport and tool requests to reach the plugin hook pipeline. DevGuard records each attempted tool call and then blocks it at its terminal `before_tool_call` hook, including exec, filesystem, read-only, unknown, and plugin-defined tools. Target pre-tool hooks can observe the attempt before the terminal deny. If audit logging fails, the call is still blocked.
+
+This is a development guardrail, not arbitrary-code isolation. Target plugin imports, registration code, background workers, and direct Node.js filesystem or network access run in the Gateway process and are outside the tool hook. Imported workspaces are normal host paths. DevGuard does not provide command simulation, synthetic tool success, containers, VMs, or production policy enforcement. Use stronger host isolation for untrusted plugin code.
+
+Audit records are written as JSONL and contain correlated lifecycle and tool-policy events. Tool arguments, derived paths, identifiers, build metadata, and environment summaries are redacted. Environment values are omitted unless their exact non-secret names appear in `logging.environmentValueAllowlist`; credential-shaped names remain fully redacted even when allowlisted.
+
+`restore` reverses only DevGuard-managed isolated-profile state. It does not change the normal source profile, imported workspaces, target source, audit logs, or side effects performed directly by target plugin code.
+
+## Configuration Reference
+
+`openclaw devguard init` creates `devguard.json` in the target root when it does not exist and validates the existing file on later runs. The schema is strict: unknown keys, missing required values, invalid types, and invalid ports fail instead of receiving permissive defaults.
+
+After initialization, `profile`, `exec`, `shell`, `run`, `tail`, `doctor`, and `restore` search the current directory and each parent for the nearest `devguard.json`. This allows those commands to run from a nested target directory. `init [plugin-path]` instead initializes the exact supplied directory, which defaults to the current directory.
+
+### Common Values
+
+| Value       | Convention                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| Commands    | A non-empty executable name or path launched directly from the target root.                                          |
+| Arguments   | An ordered JSON array of strings passed to the command without shell interpolation.                                  |
+| Watch paths | Files or directories resolved relative to the target root. Every configured path must exist when supervision starts. |
+| Plugin IDs  | Non-empty OpenClaw plugin IDs. Keep the value aligned with `openclaw.plugin.json`.                                   |
+| Ports       | Integer TCP ports from `1` through `65535`. Concurrent targets need distinct ports.                                  |
+
+A typical generated configuration is:
+
+```json
+{
+  "version": 1,
+  "plugin": {
+    "id": "my-plugin",
+    "build": {
+      "command": "bun",
+      "args": ["run", "build"]
+    },
+    "validate": {
+      "command": "bun",
+      "args": ["run", "plugin:check"]
+    },
+    "watch": ["src", "index.ts", "openclaw.plugin.json", "package.json"]
+  },
+  "logging": {
+    "environmentValueAllowlist": []
+  },
+  "gateway": {
+    "port": 19001
+  }
+}
+```
+
+### `version`
+
+| Type    | Required | Default |
+| ------- | -------- | ------- |
+| integer | yes      | `1`     |
+
+Identifies the `devguard.json` schema. Version `1` is the only accepted value.
+
+### `plugin.id`
+
+| Type   | Required | Default                          |
+| ------ | -------- | -------------------------------- |
+| string | yes      | `id` from `openclaw.plugin.json` |
+
+Identifies the target plugin that DevGuard installs, enables, inspects, watches, and expects to observe in the live Gateway. `doctor` reports a mismatch between this value and the target manifest.
+
+### `plugin.build.command`
+
+| Type   | Required | Default                                                |
+| ------ | -------- | ------------------------------------------------------ |
+| string | yes      | package manager from `packageManager`, otherwise `npm` |
+
+Selects the executable used to build the target. DevGuard recognizes `bun`, `npm`, `pnpm`, and `yarn` from the package's `packageManager` field; any other or missing value falls back to `npm`. The command runs from the target root with the caller's environment and inherited terminal output.
+
+### `plugin.build.args`
+
+| Type         | Required | Default                                         |
+| ------------ | -------- | ----------------------------------------------- |
+| string array | yes      | `["run", "plugin:build"]` or `["run", "build"]` |
+
+Provides the build command arguments. Initialization prefers a `plugin:build` package script and otherwise uses `build`. One of those scripts must exist before DevGuard can create the configuration.
+
+Edit both build fields when the inferred package-manager command does not match the target's actual build entrypoint:
+
+```json
+{
+  "command": "node",
+  "args": ["scripts/build.mjs"]
+}
+```
+
+### `plugin.validate.command`
+
+| Type   | Required                          | Default                                     |
+| ------ | --------------------------------- | ------------------------------------------- |
+| string | when `plugin.validate` is present | inferred package manager; otherwise omitted |
+
+Selects an optional post-build validation executable. Initialization creates the `plugin.validate` object only when it finds `plugin:check`, `plugin:validate`, or `validate`, in that preference order. Validation must succeed before DevGuard starts or replaces the Gateway.
+
+### `plugin.validate.args`
+
+| Type         | Required                          | Default                                           |
+| ------------ | --------------------------------- | ------------------------------------------------- |
+| string array | when `plugin.validate` is present | `["run", "<inferred-script>"]`; otherwise omitted |
+
+Provides the optional validation command arguments. Omit the complete `plugin.validate` object to disable post-build validation; providing only one of its fields is invalid.
+
+### `plugin.watch`
+
+| Type         | Required | Default                                     |
+| ------------ | -------- | ------------------------------------------- |
+| string array | yes      | existing standard source and metadata paths |
+
+Lists files and directories that trigger a rebuild while `run` is supervising. Initialization includes each existing path from this ordered candidate set:
+
+```text
+src
+cli
+lib
+utils
+index.ts
+index.js
+index.mjs
+openclaw.plugin.json
+package.json
+tsconfig.json
+```
+
+Paths are resolved from the target root. DevGuard watches file contents and ignores unchanged notifications. A changed build is debounced; if another change arrives during a build, the superseded build is stopped and the latest state is built.
+
+### `logging.environmentValueAllowlist`
+
+| Type         | Required | Default |
+| ------------ | -------- | ------- |
+| string array | yes      | `[]`    |
+
+Names exact non-secret environment variables whose values may receive a short masked preview in tool-call audit records. By default, DevGuard records environment names and metadata without values:
+
+```json
+{
+  "logging": {
+    "environmentValueAllowlist": ["NODE_ENV", "MY_PLUGIN_MODE"]
+  }
+}
+```
+
+Credential-shaped names remain fully redacted even when listed. This setting affects the DevGuard policy hook started by `run`; it does not expose values in normal CLI status output.
+
+### `gateway.port`
+
+| Type    | Required | Default |
+| ------- | -------- | ------- |
+| integer | yes      | `19001` |
+
+Sets the loopback port for the target's owned OpenClaw Gateway. DevGuard passes the value to Gateway startup, readiness checks, and `doctor`. Use a unique port for each target that may run concurrently.
+
+## CLI Reference
+
+All commands are registered beneath `openclaw devguard` by the DevGuard plugin installed in the active OpenClaw profile.
+
+### Common Command Behavior
+
+Except for `init`, commands discover the nearest target by walking upward to `devguard.json`. Commands that operate on isolated state also verify the machine-local initialization marker before continuing. Moving the repository or changing its absolute path changes its derived profile and requires initialization at the new location.
+
+DevGuard owns the OpenClaw selectors used for isolated operations. `exec`, `shell`, `run`, and internal diagnostic commands inherit the caller's environment, then replace `OPENCLAW_PROFILE`, `OPENCLAW_STATE_DIR`, and `OPENCLAW_CONFIG_PATH` with the initialized values and disable ambient channels. Source selectors still matter to `init` because they identify the normal OpenClaw profile from which agents and model settings are imported.
+
+| Environment            | Purpose                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `DEVGUARD_HOME`        | Relocates machine-local DevGuard markers, tokens, snapshots, and logs.            |
+| `OPENCLAW_PROFILE`     | Selects the source OpenClaw profile read by `init`; isolated commands replace it. |
+| `OPENCLAW_STATE_DIR`   | Selects source OpenClaw state for `init`; isolated commands replace it.           |
+| `OPENCLAW_CONFIG_PATH` | Selects the source OpenClaw config for `init`; isolated commands replace it.      |
+| `OPENCLAW_LOG_LEVEL`   | Enables OpenClaw diagnostics such as `debug` output from DevGuard.                |
+| `SHELL`                | Selects the login shell launched by `shell`; defaults to `/bin/sh`.               |
+| `NO_COLOR`             | Disables DevGuard CLI styling when present.                                       |
+| `FORCE_COLOR`          | Forces or disables DevGuard CLI color output.                                     |
+
+Normal status and command output goes to standard output. Diagnostic logging and errors use the injected OpenClaw plugin logger with a `[devguard]` prefix. `exec` and `shell` preserve the child process's exit code; other failures set a nonzero process exit code after reporting the relevant command context.
+
+### `openclaw devguard init`
+
+Creates or validates the target configuration, prepares isolated state, and installs a verified build of the target.
+
+#### Usage
+
+```sh
+openclaw devguard init [plugin-path] [options]
+```
+
+#### Arguments
+
+**`plugin-path`**
+
+Target plugin directory. Defaults to the current directory. The directory must contain `package.json`, `openclaw.plugin.json`, and either a `plugin:build` or `build` package script.
+
+#### Options
+
+**`--agent <id>`**
+
+Imports another configured source agent by exact ID. Repeat the option for additional agents. Imported agent IDs are remembered in machine-local initialization state for later `init` runs.
+
+**`--no-model-profile`**
+
+Skips model configuration and authentication transfer. Selected agents, workspace references, and identities are still imported.
+
+**`--copy-oauth`**
+
+Explicitly permits copying refreshable OAuth credentials that the provider has not marked portable. This is required for noninteractive initialization when no other usable provider authentication is available.
+
+#### Behavior
+
+Initialization creates `devguard.json` when missing and reuses a valid existing file. It derives a stable native OpenClaw profile and machine-local state path, snapshots pre-existing isolated configuration once, and refuses a previously unmanaged destination containing state that it cannot safely restore.
+
+The isolated profile always includes `main` as its default agent. DevGuard also imports a differently configured source default and every `--agent` selection. Each imported agent keeps its source workspace by reference, receives a new isolated agent directory, and starts without source sessions. Configured identities are copied; otherwise an available workspace `IDENTITY.md` is applied only to the isolated profile.
+
+Unless `--no-model-profile` is present, DevGuard projects each selected agent's effective primary model, fallbacks, referenced model entries, relevant provider configuration, and usable stored authentication. API keys and static tokens marked non-portable with `copyToAgents: false` are skipped. Provider-portable OAuth credentials are copied; other refreshable OAuth credentials require interactive confirmation or `--copy-oauth`. Existing isolated credentials win on profile-ID collisions.
+
+Environment credentials such as `OPENAI_API_KEY` remain environment credentials. They are inherited by DevGuard-managed processes but are not persisted merely to transfer a profile. Secret references remain references instead of being resolved into raw values.
+
+DevGuard configures a token-authenticated loopback Gateway, `main` as the default agent, the `DEVGUARD` Control UI identity, Docker sandboxing off, elevated tools off, and OpenClaw exec transport on. It then builds and optionally validates the target, installs and enables DevGuard and the linked target in isolated state, performs a runtime inspection, and runs OpenClaw plugin diagnostics.
+
+The command prints the target root, profile, state, audit log, imported agents, model and authentication summary, configuration disposition, and suggested next command.
+
+#### Examples
+
+```sh
+# Import the source defaults and portable authentication.
+openclaw devguard init .
+
+# Add two named agents.
+openclaw devguard init . --agent ops --agent qa
+
+# Keep agent workspaces and identities without model or auth transfer.
+openclaw devguard init . --agent ops --no-model-profile
+
+# Permit non-portable OAuth copying in a noninteractive environment.
+openclaw devguard init . --copy-oauth
+```
+
+### `openclaw devguard profile`
+
+Prints the initialized native OpenClaw profile name for scripts that need to invoke OpenClaw directly.
+
+#### Usage
+
+```sh
+openclaw devguard profile [plugin-path]
+```
+
+#### Arguments
+
+**`plugin-path`**
+
+Target directory from which to begin upward project discovery. Defaults to the current directory.
+
+#### Behavior
+
+The command verifies the initialization marker and writes only the profile name plus a newline to standard output. It does not change the caller's environment or start the Gateway.
+
+#### Example
+
+```sh
+DEVGUARD_PROFILE="$(openclaw devguard profile)"
+openclaw --profile "$DEVGUARD_PROFILE" config file
+```
+
+Prefer `exec` for a single native command and `shell` for an interactive sequence because they also select the exact isolated state and config paths.
+
+### `openclaw devguard exec`
+
+Runs one native OpenClaw command against the nearest initialized target.
+
+#### Usage
+
+```sh
+openclaw devguard exec -- <openclaw-args...>
+```
+
+#### Arguments
+
+**`openclaw-args`**
+
+The OpenClaw subcommand and arguments to execute. Use `--` before them so options are forwarded to OpenClaw rather than parsed as DevGuard options.
+
+#### Behavior
+
+`exec` changes to the discovered target root, inherits the caller's environment and terminal streams, selects the isolated profile, state, and config, disables ambient channels, and runs `openclaw` with the supplied arguments. Its exit status is the native OpenClaw command's exit status.
+
+It does not start a Gateway. Keep `run` active elsewhere before executing Gateway-backed or model-backed commands.
+
+#### Examples
+
+```sh
+openclaw devguard exec -- config get ui.assistant.name --json
+openclaw devguard exec -- plugins inspect my-plugin --runtime --json
+openclaw devguard exec -- agent --session-key devguard-smoke --message "Call an available tool" --json
+```
+
+### `openclaw devguard shell`
+
+Starts a login shell already scoped to the nearest initialized target.
+
+#### Usage
+
+```sh
+openclaw devguard shell
+```
+
+#### Behavior
+
+`shell` launches `$SHELL -l`, falling back to `/bin/sh -l`. The shell starts in the target root, inherits the caller's environment and terminal streams, and receives isolated OpenClaw profile, state, and config selectors with ambient channels disabled. The command returns the shell's exit status.
+
+The shell does not start a Gateway. Keep `run` active in another terminal for Gateway-backed or model-backed commands. Exit the shell normally to return to the source environment.
+
+#### Example
+
+```sh
+openclaw devguard shell
+openclaw config get ui.assistant.name --json
+openclaw plugins inspect my-plugin --runtime --json
+exit
+```
+
+### `openclaw devguard run`
+
+Builds, verifies, and supervises the nearest initialized target and its owned Gateway.
+
+#### Usage
+
+```sh
+openclaw devguard run [options]
+```
+
+#### Options
+
+**`--startup-timeout <seconds>`**
+
+Waits the given positive whole number of seconds for the Gateway to load and report the expected target build. Defaults to `60`.
+
+**`--unsafe-raw-stream`**
+
+Enables OpenClaw's raw event stream at the target's machine-local log directory. Raw streams may contain prompts, model content, and secrets; use this only for deliberate local debugging.
+
+**`--once`**
+
+Builds and validates the target, starts and verifies the Gateway and deny hook, then stops supervision and exits.
+
+#### Behavior
+
+`run` requires initialized state and its generated Gateway token. It builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, and active deny hook.
+
+Without `--once`, it watches every `plugin.watch` path until interrupted. A successful validated build replaces the current Gateway. A failed build or validation is recorded and leaves the last working Gateway running. An unexpected Gateway error, signal, or exit causes `run` to fail and clean up its watcher and child processes.
+
+The Gateway inherits the caller's environment, including environment-backed model credentials. DevGuard adds only the isolated OpenClaw selectors and its internal build, audit, target, diagnostics, and channel settings.
+
+#### Examples
+
+```sh
+# Supervise until interrupted.
+openclaw devguard run
+
+# Verify one build and stop.
+openclaw devguard run --once
+
+# Allow extra time on a slow machine.
+openclaw devguard run --startup-timeout 90
+
+# Observe detailed DevGuard and OpenClaw lifecycle diagnostics.
+OPENCLAW_LOG_LEVEL=debug openclaw devguard run
+```
+
+A ready Gateway reports:
+
+```text
+ready        my-plugin
+profile      devguard-my-plugin-a1b2c3d4e5f6
+build        2026-07-28T12:00:00.000Z#1
+hook         active
+log          /path/to/events.jsonl
+```
+
+### `openclaw devguard tail`
+
+Reads or follows the nearest target's DevGuard audit log.
+
+#### Usage
+
+```sh
+openclaw devguard tail [options]
+```
+
+#### Options
+
+**`--json`**
+
+Writes the underlying newline-delimited JSON records to standard output without human formatting. Diagnostics remain separate.
+
+**`--no-follow`**
+
+Reads all currently complete records and exits instead of waiting for appended events.
+
+#### Behavior
+
+Human mode renders concise lowercase event labels and relevant details. Malformed records are ignored with a diagnostic warning rather than terminating the stream. Following continues until interrupted with `Ctrl-C` or a termination signal.
+
+#### Examples
+
+```sh
+openclaw devguard tail
+openclaw devguard tail --no-follow
+openclaw devguard tail --json --no-follow
+```
+
+### `openclaw devguard doctor`
+
+Aggregates configuration, isolated-state, live runtime, and OpenClaw diagnostic checks for the nearest target.
+
+#### Usage
+
+```sh
+openclaw devguard doctor
+```
+
+#### Behavior
+
+Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, separation from normal OpenClaw state, imported agents, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active deny hook, runtime plugin inspection, and `openclaw plugins doctor`.
+
+The command prints every check instead of stopping at the first failure. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
+
+### `openclaw devguard restore`
+
+Restores or removes the nearest target's DevGuard-managed isolated state while preserving its logs.
+
+#### Usage
+
+```sh
+openclaw devguard restore
+```
+
+#### Behavior
+
+Stop `run` before restoring. DevGuard validates its initialization marker, marks restoration in progress, removes the managed isolated state directory, and atomically reinstates the saved pre-DevGuard OpenClaw configuration when one existed. It then removes the marker, Gateway token, and temporary snapshot while leaving the project log directory intact.
+
+If no active initialization marker exists, the command reports the target as unchanged. Repeating a completed restore is therefore safe. Restoration does not change the source OpenClaw profile, target repository, imported workspace contents, or direct side effects from plugin code.
+
+#### Example
+
+```sh
+openclaw devguard restore
+```
