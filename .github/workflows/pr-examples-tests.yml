@@ -77,7 +77,7 @@ jobs:
           DEVGUARD_HOME: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp/devguard-home
           NO_COLOR: '1'
           OPENAI_API_KEY: ${{ secrets.TANAAB_ALTERNATE_MALE_KEY }}
-          OPENAI_MODEL: gpt-5-nano-2025-08-07
+          OPENAI_MODEL: gpt-5.4-nano
           OPENCLAW_SKIP_CHANNELS: '1'
           OPENCLAW_STATE_DIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp/openclaw
           TMPDIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp

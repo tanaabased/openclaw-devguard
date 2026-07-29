@@ -9,7 +9,7 @@ import {
   resolveAgentWorkspaceDir,
 } from 'openclaw/plugin-sdk/agent-runtime';
 
-const MODEL_REF = `openai/${process.env.OPENAI_MODEL || 'gpt-5-nano-2025-08-07'}`;
+const MODEL_REF = `openai/${process.env.OPENAI_MODEL || 'gpt-5.4-nano'}`;
 const PROFILE_ID = 'openai:api-key';
 const PROFILE_KEY = process.env.OPENAI_API_KEY || 'leia-model-key';
 
