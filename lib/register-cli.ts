@@ -4,6 +4,7 @@ import initDevguard from '../cli/init.ts';
 import profileDevguard from '../cli/profile.ts';
 import restoreDevguard from '../cli/restore.ts';
 import runDevguard from '../cli/run.ts';
+import shellDevguard from '../cli/shell.ts';
 import tailDevguard from '../cli/tail.ts';
 import { defaultCliOutput, type CliOutput } from './cli-output.ts';
 import { type Logger, reportError } from './logger.ts';
@@ -112,6 +113,15 @@ export default function registerDevguardCli(
           throw new TypeError('OpenClaw command arguments must be strings');
         }
         return execDevguard(process.cwd(), openClawArguments);
+      });
+    });
+
+  devguard
+    .command('shell')
+    .description('Open a login shell in initialized isolated state.')
+    .action(async () => {
+      await runCliAction(options.logger, 'shell failed', async () => {
+        return shellDevguard(process.cwd());
       });
     });
 

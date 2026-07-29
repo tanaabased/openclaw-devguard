@@ -63,6 +63,7 @@ describe('lib/register-cli', () => {
         'init [plugin-path]',
         'profile [plugin-path]',
         'exec <openclaw-args...>',
+        'shell',
         'run',
         'tail',
         'doctor',
@@ -106,6 +107,7 @@ describe('lib/register-cli', () => {
     for (const specification of [
       'profile [plugin-path]',
       'exec <openclaw-args...>',
+      'shell',
       'doctor',
       'restore',
     ]) {

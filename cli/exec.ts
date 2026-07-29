@@ -1,7 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
-import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
+import loadInitializedProject from '../lib/initialized-project.ts';
 import processCommand, {
   type ProcessCommandOptions,
   type ProcessCommandResult,
@@ -9,7 +6,6 @@ import processCommand, {
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
-import parseRestoreMarker from '../utils/restore-marker.ts';
 
 export type ExecCommandRunner = (
   command: string,
@@ -31,25 +27,8 @@ export default async function execDevguard(
     throw new Error('OpenClaw command arguments are required after --');
   }
 
-  const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
-  const config = await readProjectConfig(root);
-  const paths = resolveProjectPaths(root, config.plugin.id, environment);
-  try {
-    parseRestoreMarker(
-      JSON.parse(await readFile(join(paths.projectStateRoot, 'init.json'), 'utf8')),
-      paths.projectStateRoot,
-      paths.stateDirectory,
-      paths.profileName,
-    );
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error('DevGuard isolated state is not initialized; run init again', {
-        cause: error,
-      });
-    }
-    throw error;
-  }
+  const { paths, root } = await loadInitializedProject(projectRoot, environment);
 
   const result = await (options.runCommand ?? processCommand)(
     'openclaw',
