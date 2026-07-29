@@ -3,6 +3,9 @@ import { readFile } from 'node:fs/promises';
 const delay = (milliseconds) =>
   new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 
+const LOG_TAIL_LINES = 120;
+const LOG_TAIL_CHARACTERS = 16_000;
+
 async function read(path) {
   try {
     return await readFile(path, 'utf8');
@@ -19,14 +22,43 @@ function records(contents) {
     .map((line) => JSON.parse(line));
 }
 
-async function waitForText(path, expected, count, timeoutSeconds) {
+function formatLogTail(contents) {
+  const lines = contents.trimEnd().split('\n');
+  if (lines.length === 1 && lines[0] === '') return '\n\nlog was empty';
+
+  const selected = lines.slice(-LOG_TAIL_LINES);
+  const omitted = lines.length - selected.length;
+  const label = omitted > 0 ? `last ${selected.length} log lines` : 'log output';
+  const tail = selected.join('\n').slice(-LOG_TAIL_CHARACTERS);
+  return `\n\n${label}:\n${tail}`;
+}
+
+function processIsRunning(processId) {
+  try {
+    process.kill(processId, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
+async function waitForText(path, expected, count, timeoutSeconds, processId) {
   const deadline = Date.now() + timeoutSeconds * 1_000;
   while (Date.now() < deadline) {
     const contents = await read(path);
     if (contents.split(expected).length - 1 >= count) return;
+    if (processId !== undefined && !processIsRunning(processId)) {
+      throw new Error(
+        `process ${processId} exited while waiting for ${count} occurrence(s) of ${expected} in ${path}${formatLogTail(contents)}`,
+      );
+    }
     await delay(250);
   }
-  throw new Error(`timed out waiting for ${count} occurrence(s) of ${expected} in ${path}`);
+  const contents = await read(path);
+  throw new Error(
+    `timed out waiting for ${count} occurrence(s) of ${expected} in ${path}${processId === undefined ? '' : formatLogTail(contents)}`,
+  );
 }
 
 async function waitForExit(pid, timeoutSeconds) {
@@ -120,7 +152,13 @@ const [action, ...args] = process.argv.slice(2);
 
 switch (action) {
   case 'wait-text':
-    await waitForText(args[0], args[1], Number(args[2] ?? 1), Number(args[3] ?? 60));
+    await waitForText(
+      args[0],
+      args[1],
+      Number(args[2] ?? 1),
+      Number(args[3] ?? 60),
+      args[4] === undefined ? undefined : Number(args[4]),
+    );
     break;
   case 'wait-exit':
     await waitForExit(Number(args[0]), Number(args[1] ?? 20));

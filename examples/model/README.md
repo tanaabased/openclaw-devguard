@@ -41,9 +41,10 @@ dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 
 # should complete a live gateway turn with imported authentication
 unset OPENAI_API_KEY
+export OPENCLAW_GATEWAY_STARTUP_TRACE=1
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 90
+node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 90 "$(cat "$TMPDIR/run.pid")"
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json > "$TMPDIR/live-response.json"
 ```
 
@@ -68,6 +69,8 @@ grep -F "DEVGUARD_MODEL_OK" "$TMPDIR/live-response.json"
 
 ```bash
 # should stop live supervision
-kill -TERM "$(cat "$TMPDIR/run.pid")"
-node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
+if kill -0 "$(cat "$TMPDIR/run.pid")" 2>/dev/null; then
+  kill -TERM "$(cat "$TMPDIR/run.pid")"
+  node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
+fi
 ```
