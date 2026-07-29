@@ -1,10 +1,10 @@
-# OpenClaw DevGuard v0.1
+# OpenClaw DevGuard Product Specification
 
 ## Purpose
 
-`OpenClaw DevGuard` is a development-focused OpenClaw plugin and CLI workflow for safely testing OpenClaw plugins on a developer workstation.
+`OpenClaw DevGuard` is a development-focused OpenClaw plugin and CLI workflow for supervising and testing OpenClaw plugins on a developer workstation.
 
-The primary goal of v0.1 is to let a developer observe what an agent attempts to do without allowing agent-initiated tool calls to mutate the workstation or external systems.
+Its primary goal is to let a developer observe and explicitly control what an agent attempts through OpenClaw's tool pipeline while retaining a fast local build, Gateway, diagnostics, and testing workflow.
 
 > Working name: `@tanaab/openclaw-devguard`
 
@@ -21,9 +21,9 @@ Developing OpenClaw plugins locally provides a much faster feedback loop than de
 - Existing OpenClaw audit logs intentionally omit the tool arguments and outputs needed for development debugging.
 - Raw trace logs may expose prompts, credentials, tokens, and other sensitive data.
 
-## v0.1 Product Definition
+## Product Definition
 
-DevGuard v0.1 will provide a reproducible, isolated, fail-closed OpenClaw plugin development environment.
+DevGuard provides a reproducible, isolated-profile OpenClaw plugin development environment.
 
 It will:
 
@@ -31,12 +31,12 @@ It will:
 2. Link and enable a local plugin under development.
 3. Intercept agent tool calls before execution.
 4. Log attempted tool calls in a development-focused format.
-5. Block every tool call by default.
+5. Block every tool call by default while leaving room for explicit native approval and allow policies.
 6. Automatically rebuild and restart the development Gateway when plugin code changes.
 7. Aggregate plugin validation, runtime, lifecycle, and policy diagnostics.
 8. Restore the development profile to its previous state.
 
-DevGuard v0.1 is a **capture-and-deny system**, not a true simulation engine.
+The implemented baseline is a **capture-and-deny system**, not a simulation engine. The path to `1.0.0` may add explicit `approve` and `allow` modes for real OpenClaw tool execution without changing that boundary.
 
 ## Key Safety Model
 
@@ -74,11 +74,11 @@ The documentation must state clearly:
 
 > DevGuard provides tool-pipeline guardrails, not complete host isolation.
 
-Complete isolation would require running the entire OpenClaw Gateway inside a container, VM, or separate operating-system account. That is outside the v0.1 scope.
+Complete isolation would require running the entire OpenClaw Gateway inside a container, VM, or separate operating-system account. That is outside the product scope.
 
 ## Package Shape
 
-The initial package should contain both:
+The package contains both:
 
 - an OpenClaw runtime plugin
 - an OpenClaw CLI command group
@@ -196,7 +196,7 @@ Example:
 openclaw devguard doctor
 ```
 
-Checks should include:
+In default `deny` mode, checks should include:
 
 - the expected project-specific isolated state is active
 - the normal production profile is not being mutated
@@ -235,28 +235,26 @@ It must:
 ## Tool Policy
 
 DevGuard should register a high-priority non-terminal `before_tool_call` capture hook and a
-low-priority terminal deny hook so target-plugin pre-execution hooks can run between them.
+low-priority policy hook so target-plugin pre-execution hooks can run between them. In `deny`
+mode, the policy hook should terminally block the call. In `approve` and `allow` modes, it should
+apply the corresponding policy without manufacturing a result.
 
 Default policy:
 
-| Tool category                          | v0.1 default  |
-| -------------------------------------- | ------------- |
-| Pure inspection or read-only tools     | Block and log |
-| Filesystem mutation                    | Block and log |
-| `exec` and process execution           | Block and log |
-| Network and external services          | Block and log |
-| Browser and computer control           | Block and log |
-| Messaging                              | Block and log |
-| Cron, Gateway, and node administration | Block and log |
-| Unknown plugin tools                   | Block and log |
+| Tool category                          | Default policy |
+| -------------------------------------- | -------------- |
+| Pure inspection or read-only tools     | Block and log  |
+| Filesystem mutation                    | Block and log  |
+| `exec` and process execution           | Block and log  |
+| Network and external services          | Block and log  |
+| Browser and computer control           | Block and log  |
+| Messaging                              | Block and log  |
+| Cron, Gateway, and node administration | Block and log  |
+| Unknown plugin tools                   | Block and log  |
 
 ### Modes
 
-DevGuard v0.1 supports one explicit mode:
-
-```text
-deny
-```
+DevGuard's policy vocabulary is `deny`, `approve`, and `allow`. `deny` is the implemented and required default. `approve` and `allow` are path-to-`1.0.0` features and must not be inferred from missing, unknown, or malformed configuration.
 
 #### `deny`
 
@@ -267,13 +265,51 @@ Default mode.
 - block execution
 - return a clear policy error
 
-Approval and observe modes remain possible future work. They are intentionally absent from the v0.1 configuration so an unknown or malformed mode cannot introduce a permissive fallback.
+#### `approve`
+
+Explicit native-approval mode.
+
+```bash
+openclaw devguard run --mode approve
+```
+
+- record and redact the attempted call before requesting approval
+- use OpenClaw's public `before_tool_call.requireApproval` mechanism
+- initially offer only `allow-once` and `deny`
+- treat timeout, cancellation, missing approval routing, audit failure, and malformed configuration as denial
+- record the approval request and resolution
+- permit the real tool call after approval while allowing independent OpenClaw policy to deny it
+- use OpenClaw approval surfaces rather than a DevGuard-specific terminal or browser UI
+
+#### `allow`
+
+Explicit real-execution mode.
+
+```bash
+openclaw devguard run --mode allow
+```
+
+- record and redact the attempted call
+- permit the real tool call without a DevGuard approval prompt
+- retain independent OpenClaw policy, sandbox, and tool behavior
+- block rather than execute when required audit logging fails
+- require a conspicuous run-scoped selection
+- surface the active mode in startup output, live status, logs, and `doctor`
+- never become a persisted or implicit fallback
+
+### Shared mode invariants
+
+- `deny` remains the default.
+- Unknown or malformed policy configuration resolves to `deny`.
+- Every mode uses real OpenClaw tool outcomes; no mode fabricates success.
+- `approve` and `allow` may cause real side effects and must say so clearly.
+- Mode-specific OpenClaw configuration must be internally consistent. DevGuard may not report that a call is approved or allowed while its own generated profile silently denies the same capability.
 
 ## Important Limitation: No Synthetic Tool Success
 
 The normal OpenClaw `before_tool_call` hook can inspect, rewrite, approve, or block a call, but it cannot return an arbitrary synthetic successful tool result.
 
-Therefore, v0.1 cannot transparently make the model believe that a blocked operation succeeded.
+Therefore, DevGuard cannot transparently make the model believe that a blocked operation succeeded.
 
 Example behavior:
 
@@ -293,7 +329,7 @@ Agent requests exec
 → Agent continues as though the command ran
 ```
 
-A true simulation mode requires an upstream OpenClaw execution seam that supports request-scoped synthetic tool results.
+Synthetic success is outside the product boundary even if OpenClaw later exposes such a seam.
 
 ## Logging
 
@@ -438,7 +474,7 @@ Example:
 }
 ```
 
-Configuration uses strict schema validation and rejects unknown keys by default. The deny policy, disabled channels, sandbox mode, workspace denial, and elevated-tool denial are v0.1 safety invariants rather than user-configurable escape hatches.
+Configuration uses strict schema validation and rejects unknown keys by default. Deny-mode safety settings are invariants rather than user-configurable escape hatches. Future `approve` and `allow` support must define coherent mode-specific OpenClaw settings instead of partially overriding the generated deny profile.
 
 ## Development Loop
 
@@ -457,7 +493,7 @@ Then, in another terminal:
 openclaw devguard tail
 ```
 
-During development:
+During development in the default `deny` mode:
 
 ```text
 edit plugin source
@@ -491,7 +527,7 @@ The watcher should:
 - clearly distinguish build failure from Gateway failure
 - verify the active plugin build after restart
 
-A v0.1 build identifier combines a build-success timestamp with a monotonic sequence number for the active supervision run. It must change before each Gateway replacement and appear in both lifecycle events and the live DevGuard status response.
+A build identifier combines a build-success timestamp with a monotonic sequence number for the active supervision run. It must change before each Gateway replacement and appear in both lifecycle events and the live DevGuard status response.
 
 ## Diagnostics Aggregation
 
@@ -517,7 +553,9 @@ The output should clearly separate:
 
 ## Fail-Closed Requirements
 
-The environment must fail closed.
+Policy selection and required safety and audit boundaries must fail closed. An explicitly selected
+`allow` mode permits execution by design; it must not weaken failure handling for configuration,
+redaction, or required audit logging.
 
 Examples:
 
@@ -528,136 +566,209 @@ Examples:
 - If configuration parsing fails, no permissive defaults should be assumed.
 - If redaction fails, the affected value should be omitted rather than logged.
 
-## Non-Goals for v0.1
+## Product Boundary
 
-Do not include these in the initial release:
+DevGuard treats agent-requested tool activity as untrusted and target plugin code as developer-controlled. It owns the local development workflow around public OpenClaw lifecycle, inspection, diagnostic, and tool-policy APIs.
 
-- complete host isolation
-- container orchestration for the entire Gateway
-- a web dashboard
-- synthetic successful tool results
-- full tool-result fixture playback
-- deterministic replay of complete agent runs
-- automatic capture of every environment-variable value
+In scope:
+
+- project-specific OpenClaw profile management
+- target plugin build, validation, watch, and Gateway supervision
+- redacted tool-call and lifecycle auditing
+- explicit `deny`, `approve`, and `allow` policy modes for real OpenClaw tool calls
+- native OpenClaw approval routing
+- runtime capability inspection and boundary warnings
+- reversible DevGuard-managed configuration
+- local and CI-oriented diagnostic workflows
+
+Out of scope unless the project is explicitly rechartered:
+
+- container, VM, or separate-account orchestration
+- arbitrary target-plugin code isolation
+- direct Node.js, Bun, filesystem, subprocess, or network API interception
+- synthetic tool success, command simulation, fixture playback, or agent-run replay
+- a DevGuard-specific approval UI
 - production security policy management
 - remote Agent Box provisioning
-- multi-user or multi-tenant policy management
+- multi-user or multi-tenant runtime management
 - database-backed centralized telemetry
 - automatic upstream OpenClaw patching
 
-## Future Work
+## Current Baseline
 
-### True simulation mode
+The current baseline establishes the product's core workflow:
 
-Add support when OpenClaw provides a request-scoped interception point capable of returning synthetic tool results.
+- package and `openclaw devguard` CLI registration
+- strict project configuration and stable project-specific state
+- snapshot and crash-recoverable restoration
+- high-priority non-terminal tool capture and low-priority terminal denial
+- redaction and append-only correlated JSONL events
+- target plugin build, validation, file watching, and controlled Gateway restart
+- current-build verification and unexpected Gateway exit handling
+- human and JSON `tail` output
+- aggregate `doctor` checks
+- OpenClaw lifecycle diagnostics
+- CI-first Leia operational examples
 
-Possible future command:
+This section records the intended baseline, not proof that a checkout currently satisfies it. Validation and the changelog remain the implementation evidence.
 
-```bash
-openclaw devguard run --simulate
-```
+## Path to 1.0.0
 
-### Full-Gateway container mode
+The path to `1.0.0` is prioritized by product value rather than assigned to predetermined minor versions. Re-evaluate ordering when implementation evidence changes, but do not move excluded work into scope solely because an upstream seam or implementation shortcut appears.
 
-Run the complete development Gateway in an isolated container with:
+### Evaluation rubric
 
-- ephemeral OpenClaw state
-- plugin source mounted read-only
-- dedicated writable build and state volumes
-- no host home-directory mount
-- no Docker socket
-- disabled network by default
-- only the development Gateway port exposed
+Complexity estimates include implementation, tests, failure behavior, and documentation:
 
-Possible future command:
+- **S:** one focused surface with limited coordination
+- **M:** several coordinated modules or commands
+- **L:** cross-cutting policy and operational behavior
+- **XL:** new runtime architecture or a separate product boundary
 
-```bash
-openclaw devguard run --secure
-```
+Impact measures expected improvement to the core developer workflow:
 
-### Tool fixtures and replay
+- **High:** materially improves safety, trust, or the primary test loop
+- **Medium:** meaningfully improves diagnosis or ergonomics
+- **Low:** narrow convenience or limited recurring value
 
-Allow developers to define deterministic fake tool results and replay previously captured calls.
+Effort-to-impact is qualitative:
 
-### Interactive approval UI
+- **Excellent:** high leverage and a strong early candidate
+- **Good:** worthwhile with bounded design work
+- **Fair:** useful, but requires proportionally more coordination or risk management
+- **Poor:** weak fit or excessive work for this product
 
-Provide a terminal or browser approval surface for `approve` mode.
+`Required` candidates are part of the proposed `1.0.0` contract. `Candidate` items remain eligible before `1.0.0` but should not delay it without evidence that they close a material workflow gap.
 
-### Permissive policy modes
+### Ranked feature and improvement backlog
 
-Consider explicit `approve` and dangerous `observe` modes only after their operator UX and fail-closed configuration boundaries are designed. Neither mode may become an implicit fallback or the default.
+| Rank | Feature or improvement                          | Complexity | Impact | Effort-to-impact | Disposition | Primary dependency or constraint                          |
+| ---: | ----------------------------------------------- | ---------- | ------ | ---------------- | ----------- | --------------------------------------------------------- |
+|    1 | Strict policy plumbing and mode-aware readiness | M          | High   | Excellent        | Required    | Generated OpenClaw settings must agree with active mode   |
+|    2 | Runtime capability inventory and warnings       | M          | High   | Excellent        | Required    | Stable public runtime-inspection JSON                     |
+|    3 | Complete tool policy and outcome audit trail    | M          | High   | Excellent        | Required    | Correlated before, resolution, and after-tool events      |
+|    4 | Structured `doctor --json` output               | S          | Medium | Excellent        | Candidate   | Reuse the existing aggregate checks                       |
+|    5 | Stale-process and occupied-port diagnostics     | S          | Medium | Excellent        | Candidate   | Reliable process identity and bounded probes              |
+|    6 | Native OpenClaw `approve` mode                  | L          | High   | Good             | Required    | Strict modes, audit trail, and an OpenClaw approval route |
+|    7 | Process-tree cleanup and command timeouts       | M          | High   | Good             | Required    | Best-effort host-process supervision, not resource quotas |
+|    8 | OpenClaw compatibility contract diagnostics     | M          | High   | Good             | Required    | Public SDK, hook, and runtime-inspection contracts        |
+|    9 | Gateway environment passthrough policy          | M          | Medium | Good             | Candidate   | Separate Gateway and build environments                   |
+|   10 | Explicit run-scoped `allow` mode                | L          | High   | Fair             | Required    | Mode-aware profile policy and conspicuous risk UX         |
+|   11 | `tail` filters and bounded event queries        | M          | Medium | Fair             | Candidate   | Preserve raw JSONL output semantics                       |
+|   12 | Capability changes between successful builds    | M          | Medium | Fair             | Candidate   | Normalized runtime capability snapshots                   |
 
-## v0.1 Implementation Order
+### Candidate requirements
 
-### Phase 1: Package and CLI skeleton
+#### Strict policy plumbing and mode-aware readiness
 
-- create package
-- register `openclaw devguard`
-- define configuration schema
-- implement stable project-specific state resolution
-- implement configuration snapshot and restore
+- parse only `deny`, `approve`, and `allow`
+- resolve missing, unknown, and malformed policy state to `deny`
+- expose the active mode through startup output, live Gateway status, logs, and `doctor`
+- generate coherent OpenClaw exec, sandbox, workspace, and elevated-tool settings for the selected mode
+- refuse readiness when the reported mode and generated profile disagree
+- keep `allow` run-scoped rather than silently persisted
 
-### Phase 2: Tool capture
+#### Runtime capability inventory and warnings
 
-- register high-priority capture and low-priority deny `before_tool_call` hooks
-- classify tool effects
-- implement deny policy
-- implement unknown-tool denial
-- implement redaction
-- write JSONL events
+- consume public runtime-inspection output rather than private OpenClaw registries
+- distinguish tool-pipeline-covered surfaces from hooks, services, routes, Gateway methods, channels, providers, and other uncovered runtime surfaces
+- warn rather than fail for legitimate non-tool capabilities
+- explain that registration and direct plugin code remain outside tool-policy enforcement
 
-### Phase 3: Development runner
+#### Complete tool policy and outcome audit trail
 
-- link and enable target plugin
-- run build and validation commands
-- start the development Gateway
-- implement file watching
-- implement controlled restart
-- verify loaded build
+- correlate attempted, blocked, approval-requested, approval-resolved, allowed, completed, and failed outcomes where OpenClaw exposes them
+- preserve target plugin pre- and post-tool lifecycle behavior
+- redact sensitive inputs and avoid recording raw outputs by default
+- block in every mode when a required audit record cannot be written
 
-### Phase 4: Diagnostics
+#### Native OpenClaw `approve` mode
 
-- implement `tail`
-- implement `doctor`
-- aggregate OpenClaw plugin inspection
-- enable lifecycle tracing
-- improve startup and failure reporting
+- use `before_tool_call.requireApproval`; do not build a DevGuard approval interface
+- initially offer `allow-once` and `deny` only
+- deny on timeout, cancellation, missing approval routing, audit failure, or invalid resolution
+- make clear that approval permits DevGuard to continue but does not override independent OpenClaw policy
+- validate real approved and denied lifecycles with focused tests and CI-first operational coverage
 
-### Phase 5: Hardening
+#### Process supervision reliability
 
-- add fail-closed startup checks
-- test restoration after crashes
-- test redaction
-- test stale-build detection
-- document security boundaries
-- add CI-first Leia integration tests as entries in the existing example workflow matrix
+- add configurable build and validation timeouts
+- terminate owned process trees where the supported host permits reliable process-group control
+- preserve the last working Gateway when replacement work fails
+- report incomplete cleanup without claiming hard CPU, memory, PID, or filesystem limits
 
-## Acceptance Criteria
+#### OpenClaw compatibility contract diagnostics
 
-v0.1 is complete when all of the following are true:
+- derive supported versions from canonical package and plugin metadata
+- detect missing or changed public hooks, status fields, and runtime-inspection contracts before starting an unsafe or misleading session
+- avoid private, hashed, or unexported OpenClaw modules
+- provide actionable upgrade or compatibility errors
+
+#### Gateway environment passthrough policy
+
+- distinguish the target build environment from the Gateway runtime environment
+- pass only an intentional Gateway baseline plus explicitly selected values
+- report variable names rather than values
+- describe this as credential hygiene, not target-plugin isolation
+
+#### Explicit run-scoped `allow` mode
+
+- require an explicit CLI selection for each supervised run
+- record that real side effects are possible before readiness
+- audit every attempted and completed tool call while allowing the real OpenClaw result
+- block instead of executing when required audit logging fails
+- retain independent OpenClaw policy behavior
+- never infer, persist, or fall back to `allow`
+
+#### Diagnostic ergonomics
+
+- make `doctor --json` represent the same checks as human output
+- keep `tail --json` as an unmodified JSONL stream
+- add filters or bounded queries without creating a database or telemetry service
+- compare capability snapshots only after successful, verified builds
+
+### Excluded feature evaluation
+
+These items are intentionally not candidates on the path to `1.0.0`:
+
+| Feature                                   | Complexity | Potential impact | Effort-to-impact | Reason excluded                                             |
+| ----------------------------------------- | ---------- | ---------------- | ---------------- | ----------------------------------------------------------- |
+| Full-Gateway container or VM mode         | XL         | High             | Poor             | Creates a separate isolation and runtime-management product |
+| Standalone build and validation sandbox   | XL         | Medium           | Poor             | Duplicates container concerns and fragments the build loop  |
+| Synthetic success or command simulation   | XL         | Medium           | Poor             | Fabricates state and crosses the real-execution boundary    |
+| Tool fixtures or deterministic replay     | L–XL       | Medium           | Poor             | Depends on simulation and expands into a testing platform   |
+| DevGuard-specific interactive approval UI | L          | Low              | Poor             | Duplicates native OpenClaw approval surfaces                |
+| Direct Node.js API interception           | XL         | Low              | Poor             | Is bypassable and would create a false security boundary    |
+| Production, remote, or multi-user policy  | XL         | Low              | Poor             | Conflicts with the local developer-workflow focus           |
+
+## 1.0.0 Acceptance Criteria
+
+`1.0.0` is ready when the current baseline and every `Required` backlog item satisfy focused tests and the following product outcomes:
 
 1. A developer can initialize DevGuard against an external OpenClaw plugin repository with one command.
-2. The normal OpenClaw profile and credentials are not used.
-3. Ambient messaging channels are not connected.
-4. A deterministic OpenClaw tool-pipeline probe with agent and run context can attempt an `exec` call without the command executing.
-5. The attempted command appears in the DevGuard log.
-6. Filesystem mutation attempts are blocked and recorded.
-7. Unknown tools are blocked by default.
-8. Sensitive environment values are redacted.
-9. Editing the target plugin triggers a build and controlled Gateway restart.
-10. The developer can determine which plugin build is currently loaded.
-11. Plugin validation and runtime registration failures are clearly reported.
-12. `doctor` detects unsafe or incorrect configuration.
-13. `restore` returns the development profile to its previous configuration.
-14. Documentation clearly explains that plugin code itself still runs on the host.
+2. The normal OpenClaw profile is not mutated and ambient messaging channels are not connected.
+3. `deny` is the default and malformed policy state cannot produce a permissive fallback.
+4. Deterministic probes prove exec, filesystem mutation, and unknown tool attempts are captured and denied without executing.
+5. Target plugin pre-tool hooks run before DevGuard's terminal decision and post-tool hooks receive the real blocked, approved, allowed, failed, or completed outcome exposed by OpenClaw.
+6. `approve` uses native OpenClaw approval routing and denies on timeout, cancellation, missing routing, invalid resolution, or audit failure.
+7. `allow` requires a conspicuous run-scoped selection, permits real OpenClaw execution, and blocks when required audit logging fails.
+8. Startup output, live status, logs, and `doctor` agree on the active policy mode and loaded target build.
+9. Sensitive environment values and tool inputs are redacted according to the logging contract.
+10. Runtime capability inspection distinguishes tool-covered and uncovered plugin surfaces without claiming arbitrary-code isolation.
+11. Editing the target plugin triggers non-overlapping build, validation, and controlled Gateway replacement while preserving the last working Gateway on failure.
+12. Owned build, validation, and Gateway processes have bounded shutdown behavior, and incomplete process-tree cleanup is reported honestly.
+13. OpenClaw public-contract incompatibilities fail with actionable diagnostics.
+14. `restore` returns DevGuard-managed profile configuration to its prior state while preserving logs.
+15. CI-first operational scenarios cover the default deny path and every real-execution mode without relying on the developer's normal OpenClaw profile.
+16. Documentation clearly explains real side effects in `approve` and `allow`, direct target-plugin host access, and every excluded product boundary.
 
 ## Product Positioning
 
 DevGuard should be positioned as:
 
-> A reproducible, inspectable, fail-closed development environment for OpenClaw plugins.
+> A reproducible, inspectable development supervisor for OpenClaw plugins, with explicit deny, approve, and allow policies for real OpenClaw tool calls.
 
-It is not merely another production approval or policy plugin.
+It is not a production policy plugin, arbitrary-code sandbox, or simulation engine.
 
 Its main value is combining:
 
@@ -665,7 +776,7 @@ Its main value is combining:
 - local plugin linking
 - automatic build and Gateway restart
 - tool-call capture
-- fail-closed blocking
+- explicit fail-closed policy handling
 - safe redaction
 - correlated logs
 - runtime diagnostics
