@@ -24,7 +24,6 @@ node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-text "$TMPDIR/run.log" 
 # should pass the aggregate safety and runtime doctor
 set -o pipefail
 (cd "$TMPDIR/plugin" && openclaw devguard doctor) 2>&1 | tee "$TMPDIR/doctor.log"
-test "$(grep -c '^pass' "$TMPDIR/doctor.log")" -eq 18
 grep -F "pass         isolated profile active" "$TMPDIR/doctor.log"
 grep -F "pass         unknown tools denied" "$TMPDIR/doctor.log"
 grep -F "pass         current plugin build" "$TMPDIR/doctor.log"

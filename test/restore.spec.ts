@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { stripVTControlCharacters } from 'node:util';
 
 import restoreDevguard from '../cli/restore.ts';
 import { type Logger } from '../lib/logger.ts';
@@ -75,8 +76,8 @@ describe('cli/restore', () => {
       const log = await readFile(paths.logPath, 'utf8');
       assert.match(log, /"event":"existing"/);
       assert.match(log, /"event":"configuration_restored"/);
-      assert.match(writes[0] ?? '', /^restored\s+example-plugin/m);
-      assert.match(writes[1] ?? '', /^unchanged\s+example-plugin/m);
+      assert.match(stripVTControlCharacters(writes[0] ?? ''), /^restored\s+example-plugin/m);
+      assert.match(stripVTControlCharacters(writes[1] ?? ''), /^unchanged\s+example-plugin/m);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
