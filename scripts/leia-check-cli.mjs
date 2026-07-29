@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const delay = (milliseconds) =>
   new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
@@ -15,14 +17,14 @@ async function read(path) {
   }
 }
 
-function records(contents) {
+export function parseRecords(contents) {
   return contents
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line));
 }
 
-function formatLogTail(contents) {
+export function formatLogTail(contents) {
   const lines = contents.trimEnd().split('\n');
   if (lines.length === 1 && lines[0] === '') return '\n\nlog was empty';
 
@@ -75,16 +77,14 @@ async function waitForExit(pid, timeoutSeconds) {
   throw new Error(`process ${pid} did not exit within ${timeoutSeconds} seconds`);
 }
 
-async function assertBlocked(path) {
-  const result = JSON.parse(await readFile(path, 'utf8'));
+export function assertBlockedResult(result, label = 'result') {
   if (result.blocked !== true || result.kind !== 'veto') {
-    throw new Error(`${path} did not contain a terminal blocked tool outcome`);
+    throw new Error(`${label} did not contain a terminal blocked tool outcome`);
   }
 }
 
-async function assertDenyLog(path) {
-  const contents = await readFile(path, 'utf8');
-  const events = records(contents);
+export function assertDenyLogContents(contents) {
+  const events = parseRecords(contents);
   const attempted = events.filter(({ event }) => event === 'tool_call_attempted');
   const blocked = events.filter(({ event }) => event === 'tool_call_blocked');
   const expectedTools = new Set(['exec', 'write', 'totally-unknown-tool']);
@@ -128,8 +128,7 @@ async function assertDenyLog(path) {
   }
 }
 
-async function assertRestartLog(path) {
-  const events = records(await readFile(path, 'utf8'));
+export function assertRestartEvents(events) {
   const builds = events.filter(({ event }) => event === 'build_succeeded');
   const loaded = events.filter(({ event }) => event === 'target_plugin_loaded');
   const restarted = events.filter(({ event }) => event === 'gateway_restart_requested');
@@ -148,35 +147,52 @@ async function assertRestartLog(path) {
   if (failed.length > 0) throw new Error(`restart log contained ${failed.length} failure event(s)`);
 }
 
-const [action, ...args] = process.argv.slice(2);
-
-switch (action) {
-  case 'wait-text':
-    await waitForText(
-      args[0],
-      args[1],
-      Number(args[2] ?? 1),
-      Number(args[3] ?? 60),
-      args[4] === undefined ? undefined : Number(args[4]),
-    );
-    break;
-  case 'wait-exit':
-    await waitForExit(Number(args[0]), Number(args[1] ?? 20));
-    break;
-  case 'assert-jsonl':
-    if (records(await readFile(args[0], 'utf8')).length === 0) {
-      throw new Error(`${args[0]} did not contain JSONL records`);
-    }
-    break;
-  case 'assert-blocked':
-    await assertBlocked(args[0]);
-    break;
-  case 'assert-deny-log':
-    await assertDenyLog(args[0]);
-    break;
-  case 'assert-restart-log':
-    await assertRestartLog(args[0]);
-    break;
-  default:
-    throw new Error(`unknown example check: ${String(action)}`);
+async function assertBlocked(path) {
+  assertBlockedResult(JSON.parse(await readFile(path, 'utf8')), path);
 }
+
+async function assertDenyLog(path) {
+  assertDenyLogContents(await readFile(path, 'utf8'));
+}
+
+async function assertRestartLog(path) {
+  assertRestartEvents(parseRecords(await readFile(path, 'utf8')));
+}
+
+export async function main(args = process.argv.slice(2)) {
+  const [action, ...actionArgs] = args;
+
+  switch (action) {
+    case 'wait-text':
+      await waitForText(
+        actionArgs[0],
+        actionArgs[1],
+        Number(actionArgs[2] ?? 1),
+        Number(actionArgs[3] ?? 60),
+        actionArgs[4] === undefined ? undefined : Number(actionArgs[4]),
+      );
+      break;
+    case 'wait-exit':
+      await waitForExit(Number(actionArgs[0]), Number(actionArgs[1] ?? 20));
+      break;
+    case 'assert-jsonl':
+      if (parseRecords(await readFile(actionArgs[0], 'utf8')).length === 0) {
+        throw new Error(`${actionArgs[0]} did not contain JSONL records`);
+      }
+      break;
+    case 'assert-blocked':
+      await assertBlocked(actionArgs[0]);
+      break;
+    case 'assert-deny-log':
+      await assertDenyLog(actionArgs[0]);
+      break;
+    case 'assert-restart-log':
+      await assertRestartLog(actionArgs[0]);
+      break;
+    default:
+      throw new Error(`unknown example check: ${String(action)}`);
+  }
+}
+
+const entrypoint = process.argv[1];
+if (entrypoint && import.meta.url === pathToFileURL(resolve(entrypoint)).href) await main();
