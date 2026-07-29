@@ -15,7 +15,7 @@ describe('cli/init configuration', () => {
       tools: { exec: { mode: 'allow' }, elevated: { enabled: true } },
     }) as {
       agents: {
-        defaults: { model: string; sandbox: { mode: string; workspaceAccess: string } };
+        defaults: { model: string; sandbox: { mode: string } };
         list: unknown[];
       };
       gateway: { auth: { token: string }; bind: string; mode: string; port: number };
@@ -23,7 +23,7 @@ describe('cli/init configuration', () => {
     };
 
     assert.equal(patch.agents.defaults.model, 'openai/model-test');
-    assert.deepEqual(patch.agents.defaults.sandbox, { mode: 'all', workspaceAccess: 'none' });
+    assert.deepEqual(patch.agents.defaults.sandbox, { mode: 'off' });
     assert.equal(patch.agents.list.length, 1);
     assert.deepEqual(patch.tools, {
       exec: { mode: 'deny' },

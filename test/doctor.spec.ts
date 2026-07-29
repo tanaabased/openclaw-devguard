@@ -36,7 +36,7 @@ describe('cli/doctor', () => {
       },
       tools: { exec: { mode: 'deny' }, elevated: { enabled: false } },
       agents: {
-        defaults: { sandbox: { mode: 'all', workspaceAccess: 'none' } },
+        defaults: { sandbox: { mode: 'off' } },
         list: [{ id: 'main', agentDir: join(paths.stateDirectory, 'agents/main/agent') }],
       },
     };
@@ -103,7 +103,7 @@ describe('cli/doctor', () => {
       });
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 20);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 19);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
       assert.deepEqual(commands, [
         ['config', 'get', 'gateway', '--json'],

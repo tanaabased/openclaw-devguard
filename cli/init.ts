@@ -152,7 +152,7 @@ export function createIsolatedStatePatch(
       ...profileAgents,
       defaults: {
         ...profileDefaults,
-        sandbox: { mode: 'all', workspaceAccess: 'none' },
+        sandbox: { mode: 'off' },
       },
     },
   };

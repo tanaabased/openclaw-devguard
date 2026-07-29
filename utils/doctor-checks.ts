@@ -59,10 +59,8 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
     nestedValue(stateConfig, ['gateway', 'bind']) === 'loopback' &&
     nestedValue(stateConfig, ['gateway', 'auth', 'mode']) === 'token' &&
     nestedValue(stateConfig, ['gateway', 'port']) === input.expectedPort;
-  const sandboxEnabled =
-    nestedValue(stateConfig, ['agents', 'defaults', 'sandbox', 'mode']) === 'all';
-  const workspaceDenied =
-    nestedValue(stateConfig, ['agents', 'defaults', 'sandbox', 'workspaceAccess']) === 'none';
+  const sandboxDisabled =
+    nestedValue(stateConfig, ['agents', 'defaults', 'sandbox', 'mode']) === 'off';
   const elevatedDisabled = nestedValue(stateConfig, ['tools', 'elevated', 'enabled']) === false;
   const execDenied = nestedValue(stateConfig, ['tools', 'exec', 'mode']) === 'deny';
   const configuredAgents = nestedValue(stateConfig, ['agents', 'list']);
@@ -104,12 +102,11 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
       gatewayConfigured,
       'expected token-auth loopback gateway',
     ),
-    check('sandbox-enabled', 'sandbox enabled', sandboxEnabled, 'expected sandbox mode all'),
     check(
-      'workspace-denied',
-      'workspace denied',
-      workspaceDenied,
-      'expected workspace access none',
+      'sandbox-disabled',
+      'docker sandbox disabled',
+      sandboxDisabled,
+      'expected sandbox mode off',
     ),
     check('elevated-disabled', 'elevated disabled', elevatedDisabled),
     check('exec-denied', 'exec denied', execDenied),
