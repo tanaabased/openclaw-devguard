@@ -33,7 +33,7 @@ describe('lib/project-config', () => {
     );
   });
 
-  it('should infer an optional plugin validation command', async () => {
+  it('should infer plugin commands and watched entrypoints', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-project-config-'));
 
     try {
@@ -46,6 +46,7 @@ describe('lib/project-config', () => {
           }),
         ),
         writeFile(join(root, 'openclaw.plugin.json'), JSON.stringify({ id: 'example-plugin' })),
+        writeFile(join(root, 'index.mjs'), 'export default {};\n'),
       ]);
 
       const config = await createProjectConfig(root);
@@ -55,6 +56,7 @@ describe('lib/project-config', () => {
         command: 'bun',
         args: ['run', 'plugin:check'],
       });
+      assert.deepEqual(config.plugin.watch, ['index.mjs', 'openclaw.plugin.json', 'package.json']);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

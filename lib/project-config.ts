@@ -161,6 +161,7 @@ async function inferWatchPaths(pluginRoot: string): Promise<string[]> {
     'utils',
     'index.ts',
     'index.js',
+    'index.mjs',
     'openclaw.plugin.json',
     'package.json',
     'tsconfig.json',

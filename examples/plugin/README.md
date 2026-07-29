@@ -8,7 +8,7 @@ This scenario uses packed DevGuard to supervise a separate linked plugin, verifi
 # should prepare the scenario-owned target plugin
 test -f "$DEVGUARD_PACKAGE"
 mkdir -p "$TMPDIR/plugin"
-cp "$GITHUB_WORKSPACE/examples/plugin/index.ts" "$GITHUB_WORKSPACE/examples/plugin/openclaw.plugin.json" "$GITHUB_WORKSPACE/examples/plugin/package.json" "$TMPDIR/plugin"
+cp "$GITHUB_WORKSPACE/examples/plugin/index.mjs" "$GITHUB_WORKSPACE/examples/plugin/openclaw.plugin.json" "$GITHUB_WORKSPACE/examples/plugin/package.json" "$TMPDIR/plugin"
 
 # should install and enable packed devguard
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
@@ -36,7 +36,7 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 # should infer, build, and expose the separate target plugin
 set -o pipefail
 grep -F '"id"' "$TMPDIR/plugin/devguard.json" | grep -F '"devguard-example"'
-test -f "$TMPDIR/plugin/dist/index.js"
+test -f "$TMPDIR/plugin/index.mjs"
 (cd "$TMPDIR/plugin" && openclaw devguard doctor) > "$TMPDIR/doctor.log" 2>&1
 grep -F "pass" "$TMPDIR/doctor.log" | grep -F "target plugin id"
 grep -F "pass" "$TMPDIR/doctor.log" | grep -F "live target plugin"
