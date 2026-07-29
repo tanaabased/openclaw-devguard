@@ -134,6 +134,36 @@ describe('lib/profile-import', () => {
     assert.equal(resolved.auth.copied, 2);
   });
 
+  it('should keep main as the isolated default when the source default differs', () => {
+    const prepared = prepareProfileImport({
+      copyModelProfile: false,
+      destinationStateDirectory: '/isolated/state',
+      environment: { OPENCLAW_STATE_DIR: '/source/state' },
+      dependencies: {
+        loadSourceConfig: () => ({
+          agents: {
+            defaults: { workspace: '/source/workspaces' },
+            list: [
+              { id: 'main', workspace: '/source/workspaces/main' },
+              { id: 'ops', default: true, workspace: '/source/workspaces/ops' },
+            ],
+          },
+        }),
+      },
+    });
+    const resolved = resolveProfileImport(prepared, false);
+    const agents = (resolved.configPatch as OpenClawConfig).agents?.list ?? [];
+
+    assert.deepEqual(resolved.agentIds, ['main', 'ops']);
+    assert.deepEqual(
+      agents.map(({ default: isDefault, id }) => ({ id, default: isDefault })),
+      [
+        { id: 'main', default: true },
+        { id: 'ops', default: undefined },
+      ],
+    );
+  });
+
   it('should load a workspace-only identity through isolated openclaw state', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-profile-identity-'));
     const workspace = join(root, 'devbot');

@@ -44,6 +44,7 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 
 ```bash
 # should retain the source workspace and materialize identity only in isolated state
+set -o pipefail
 cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw config get agents.list --json > "$TMPDIR/isolated-agents.json"
 grep -F '"main"' "$TMPDIR/isolated-agents.json"
@@ -51,6 +52,10 @@ grep -F '"devbot"' "$TMPDIR/isolated-agents.json"
 grep -F '"identity"' "$TMPDIR/isolated-agents.json"
 grep -F "$TMPDIR/source-devbot" "$TMPDIR/isolated-agents.json"
 grep -F "$(cat "$TMPDIR/state-path")/agents/devbot/agent" "$TMPDIR/isolated-agents.json"
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw config get 'agents.list[0].id' --json | grep -F '"main"'
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw config get 'agents.list[0].default' --json | grep -F 'true'
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw config get ui.assistant.name --json | grep -F '"DEVGUARD"'
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw config get ui.assistant.avatar --json | grep -Fq '"data:image/png;base64,'
 
 # should report both agents and the disabled model transfer
 set -o pipefail
@@ -59,10 +64,15 @@ grep -F "model" "$TMPDIR/init.log" | grep -F "not imported"
 grep -F "auth" "$TMPDIR/init.log" | grep -F "not imported"
 
 # should expose devbot identity through both live gateway surfaces
+set -o pipefail
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw gateway call agents.list --json > "$TMPDIR/agents-list.json"
 grep -F '"defaultId"' "$TMPDIR/agents-list.json" | grep -F '"main"'
 grep -F '"id"' "$TMPDIR/agents-list.json" | grep -F '"devbot"'
 grep -F '"identity"' "$TMPDIR/agents-list.json"
+OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw gateway call agent.identity.get --json --params '{"agentId":"main"}' > "$TMPDIR/main-identity.json"
+grep -F '"agentId"' "$TMPDIR/main-identity.json" | grep -F '"main"'
+grep -F '"name"' "$TMPDIR/main-identity.json" | grep -F '"DEVGUARD"'
+grep -F '"avatarStatus"' "$TMPDIR/main-identity.json" | grep -F '"data"'
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw gateway call agent.identity.get --json --params '{"agentId":"devbot"}' > "$TMPDIR/agent-identity.json"
 grep -F '"agentId"' "$TMPDIR/agent-identity.json" | grep -F '"devbot"'
 grep -F '"avatarStatus"' "$TMPDIR/agent-identity.json" | grep -F '"local"'

@@ -28,6 +28,9 @@ import {
 } from '../lib/profile-import.ts';
 import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
 
+const DEVGUARD_ASSISTANT_NAME = 'DEVGUARD';
+const DEVGUARD_AVATAR_DATA_URI_PREFIX = 'data:image/png;base64,';
+
 export interface InitDevguardOptions {
   agentIds?: string[];
   confirmOAuthCopy?: (providers: string[]) => Promise<boolean>;
@@ -128,6 +131,7 @@ export function createIsolatedStatePatch(
   port: number,
   gatewayToken: string,
   profilePatch: Record<string, unknown>,
+  assistantAvatar: Buffer,
 ): Record<string, unknown> {
   const profileAgents =
     profilePatch.agents &&
@@ -140,6 +144,10 @@ export function createIsolatedStatePatch(
     typeof profileAgents.defaults === 'object' &&
     !Array.isArray(profileAgents.defaults)
       ? (profileAgents.defaults as Record<string, unknown>)
+      : {};
+  const profileUi =
+    profilePatch.ui && typeof profilePatch.ui === 'object' && !Array.isArray(profilePatch.ui)
+      ? (profilePatch.ui as Record<string, unknown>)
       : {};
   return {
     ...profilePatch,
@@ -157,6 +165,13 @@ export function createIsolatedStatePatch(
         sandbox: { mode: 'off' },
       },
     },
+    ui: {
+      ...profileUi,
+      assistant: {
+        name: DEVGUARD_ASSISTANT_NAME,
+        avatar: `${DEVGUARD_AVATAR_DATA_URI_PREFIX}${assistantAvatar.toString('base64')}`,
+      },
+    },
   };
 }
 
@@ -165,6 +180,7 @@ async function configureIsolatedState(
   port: number,
   environment: NodeJS.ProcessEnv,
   profilePatch: Record<string, unknown>,
+  assistantAvatar: Buffer,
 ): Promise<void> {
   const isolatedEnvironment = isolatedOpenClawEnvironment(environment, stateDirectory);
   const tokenPath = join(dirname(stateDirectory), 'gateway-token');
@@ -182,7 +198,7 @@ async function configureIsolatedState(
       mode: 0o600,
     });
   }
-  const patch = createIsolatedStatePatch(port, gatewayToken, profilePatch);
+  const patch = createIsolatedStatePatch(port, gatewayToken, profilePatch, assistantAvatar);
   await processCommand('openclaw', ['config', 'patch', '--stdin'], {
     env: isolatedEnvironment,
     input: JSON.stringify(patch),
@@ -272,6 +288,7 @@ export default async function initDevguard(
   logDebug(options.logger, `initializing plugin workspace ${resolve(pluginPath)}`);
   const pluginRoot = await realpath(resolve(pluginPath));
   const devguardRoot = await realpath(options.pluginRoot);
+  const assistantAvatar = await readFile(join(devguardRoot, 'assets', 'devbot.png'));
   const { config, created } = await ensureProjectConfig(pluginRoot);
   const paths = resolveProjectPaths(pluginRoot, config.plugin.id, environment);
   const existingMarker = await readInitializationMarker(paths.projectStateRoot);
@@ -299,6 +316,7 @@ export default async function initDevguard(
     config.gateway.port,
     environment,
     profileImport.configPatch,
+    assistantAvatar,
   );
   await applyProfileIdentityImport(
     profileImport,

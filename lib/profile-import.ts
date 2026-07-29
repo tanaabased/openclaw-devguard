@@ -283,7 +283,7 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
   const loadDestinationAuthStore = dependencies.loadAuthStore ?? defaultLoadDestinationAuthStore;
   const defaultAgentId = resolveDefaultAgentId(sourceConfig);
   const requestedAgentIds = normalizeAgentIds(options.agentIds);
-  const availableAgentIds = new Set(listAgentIds(sourceConfig));
+  const availableAgentIds = new Set(['main', ...listAgentIds(sourceConfig)]);
   const unknownAgentIds = requestedAgentIds.filter((agentId) => !availableAgentIds.has(agentId));
   if (unknownAgentIds.length > 0) {
     throw new Error(
@@ -291,7 +291,7 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
     );
   }
 
-  const selectedAgentIds = normalizeAgentIds([defaultAgentId, ...requestedAgentIds]);
+  const selectedAgentIds = normalizeAgentIds(['main', defaultAgentId, ...requestedAgentIds]);
   const configuredEntries = new Map(
     listAgentEntries(sourceConfig).map((entry) => [entry.id, entry]),
   );
@@ -327,7 +327,7 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
 
     return {
       id: agentId,
-      default: agentId === defaultAgentId,
+      default: agentId === 'main',
       workspace: resolveAgentWorkspaceDir(sourceConfig, agentId, options.environment),
       sourceAgentDir,
       destinationAgentDir,
