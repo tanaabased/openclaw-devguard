@@ -19,6 +19,9 @@ import {
 import { logDebug, logInfo, type Logger } from '../lib/logger.ts';
 
 export interface InitDevguardOptions {
+  agentIds?: string[];
+  copyModelProfile?: boolean;
+  copyOAuth?: boolean;
   environment?: NodeJS.ProcessEnv;
   logger: Logger;
   output?: CliOutput;

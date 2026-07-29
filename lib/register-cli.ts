@@ -7,11 +7,17 @@ import { defaultCliOutput, type CliOutput } from './cli-output.ts';
 import { type Logger, reportError } from './logger.ts';
 
 type Action = (...args: unknown[]) => unknown;
+type RepeatableOptionParser = (value: string, previous: string[]) => string[];
 
 export interface CommandLike {
   command(specification: string): CommandLike;
   description(text: string): CommandLike;
-  option(flags: string, description: string): CommandLike;
+  option(
+    flags: string,
+    description: string,
+    parser?: RepeatableOptionParser,
+    defaultValue?: string[],
+  ): CommandLike;
   action(handler: Action): CommandLike;
 }
 
@@ -34,6 +40,10 @@ export async function runCliAction(
   }
 }
 
+export function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 export default function registerDevguardCli(
   program: CommandLike,
   options: RegisterDevguardCliOptions,
@@ -46,9 +56,20 @@ export default function registerDevguardCli(
   devguard
     .command('init [plugin-path]')
     .description('Initialize DevGuard metadata for a plugin workspace.')
-    .action(async (pluginPath: unknown) => {
+    .option('--agent <id>', 'Import an additional OpenClaw agent by id.', collectOption, [])
+    .option('--no-model-profile', 'Do not import model configuration or authentication.')
+    .option('--copy-oauth', 'Copy refreshable OAuth credentials into isolated state.')
+    .action(async (pluginPath: unknown, commandOptions: unknown) => {
+      const flags = (commandOptions ?? {}) as {
+        agent?: string[];
+        copyOauth?: boolean;
+        modelProfile?: boolean;
+      };
       await runCliAction(options.logger, 'initialization failed', async () => {
         await initDevguard(typeof pluginPath === 'string' ? pluginPath : '.', {
+          agentIds: flags.agent,
+          copyModelProfile: flags.modelProfile !== false,
+          copyOAuth: flags.copyOauth,
           logger: options.logger,
           output,
           pluginRoot: options.pluginRoot,

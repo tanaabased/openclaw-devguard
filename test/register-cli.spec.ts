@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 
 import { type Logger } from '../lib/logger.ts';
-import registerDevguardCli, { type CommandLike, runCliAction } from '../lib/register-cli.ts';
+import registerDevguardCli, {
+  collectOption,
+  type CommandLike,
+  runCliAction,
+} from '../lib/register-cli.ts';
 
 const logger: Logger = {
   info() {},
@@ -57,6 +61,10 @@ describe('lib/register-cli', () => {
       new Set(['init [plugin-path]', 'run', 'tail', 'doctor', 'restore']),
     );
     assert.deepEqual(
+      new Set(findCommand(devguard, 'init [plugin-path]').options),
+      new Set(['--agent <id>', '--no-model-profile', '--copy-oauth']),
+    );
+    assert.deepEqual(
       new Set(findCommand(devguard, 'run').options),
       new Set(['--unsafe-raw-stream', '--once']),
     );
@@ -64,6 +72,10 @@ describe('lib/register-cli', () => {
       new Set(findCommand(devguard, 'tail').options),
       new Set(['--json', '--no-follow']),
     );
+  });
+
+  it('should collect repeated agent options in command-line order', () => {
+    assert.deepEqual(collectOption('ops', collectOption('main', [])), ['main', 'ops']);
   });
 
   it('should expose handlers for every implemented command', () => {
