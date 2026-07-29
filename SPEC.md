@@ -118,6 +118,12 @@ Responsibilities:
 
 - select or create stable project-specific OpenClaw state
 - ensure state is separate from the normal OpenClaw profile
+- resolve the source profile's default agent and optional repeated `--agent` selections
+- retain source workspaces while assigning isolated agent directories and empty sessions
+- import effective model selections and only their referenced provider configuration
+- copy portable stored authentication without persisting environment credentials
+- require explicit consent for OAuth credentials that do not declare portability
+- avoid importing channels, bindings, source sessions, or source tool-policy overrides
 - snapshot the existing development-profile configuration
 - disable ambient channels
 - link the local plugin
@@ -606,6 +612,7 @@ DevGuard treats agent-requested tool activity as untrusted and target plugin cod
 In scope:
 
 - project-specific OpenClaw profile management
+- bounded source model, authentication, and agent-workspace projection
 - target plugin build, validation, watch, and Gateway supervision
 - redacted tool-call and lifecycle auditing
 - explicit `deny`, `approve`, and `allow` policy modes for real OpenClaw tool calls
@@ -633,6 +640,8 @@ The current baseline establishes the product's core workflow:
 
 - package and `openclaw devguard` CLI registration
 - strict project configuration and stable project-specific state
+- default model and portable authentication transfer with explicit OAuth consent
+- source default-agent and repeatable selected-agent import with isolated runtime state
 - snapshot and crash-recoverable restoration
 - high-priority non-terminal tool capture and low-priority terminal denial
 - redaction and append-only correlated JSONL events
@@ -821,8 +830,8 @@ These items are intentionally not candidates on the path to `1.0.0`:
 
 `1.0.0` is ready when the current baseline and every `Required` backlog item satisfy focused tests and the following product outcomes:
 
-1. A developer can initialize DevGuard against an external OpenClaw plugin repository with one command.
-2. The normal OpenClaw profile is not mutated and ambient messaging channels are not connected.
+1. A developer can initialize an external plugin and run its imported default model through the isolated Gateway when source authentication is portable or explicitly authorized.
+2. The normal profile is not mutated; selected agents retain source workspaces while using isolated agent/session state, and ambient channels are not connected.
 3. `deny` is the default and malformed policy state cannot produce a permissive fallback.
 4. Deterministic probes prove exec, filesystem mutation, and unknown tool attempts are captured and denied without executing.
 5. Target plugin pre-tool hooks run before DevGuard's terminal decision and post-tool hooks receive the real blocked, approved, allowed, failed, or completed outcome exposed by OpenClaw.

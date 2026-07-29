@@ -31,6 +31,8 @@ The target must contain `package.json`, `openclaw.plugin.json`, and a `build` or
 - creates or validates `devguard.json`
 - creates stable project-specific state under `~/.openclaw-dev/devguard/projects/`
 - snapshots pre-existing isolated configuration once
+- imports the source default agent, effective model selection, and portable authentication
+- resolves additional `--agent` selections from the source profile
 - configures a token-authenticated loopback Gateway with channels skipped
 - denies exec and elevated tools and removes sandbox workspace access
 - builds the target
@@ -67,6 +69,42 @@ The generated configuration is deliberately strict:
 
 Change `build`, `validate`, `watch`, or `gateway.port` when the inferred defaults do not fit. The schema rejects unknown keys. Use different ports when supervising multiple targets concurrently. Set `DEVGUARD_HOME` to move the parent directory for project state.
 
+## Import Models And Agents
+
+`init` reads from the OpenClaw profile active for that command. It respects normal OpenClaw profile, state, and config-path selection rather than assuming `~/.openclaw`.
+
+The default invocation imports the source default agent with:
+
+- its resolved workspace
+- its effective primary model and fallbacks
+- referenced model-provider and model-entry configuration
+- portable stored API keys and static tokens
+- portable OAuth credentials whose provider sets `copyToAgents: true`
+
+Import another configured agent by exact ID with a repeatable option:
+
+```sh
+openclaw devguard init . --agent ops --agent qa
+```
+
+The imported agent keeps its source workspace by reference but receives a new `agentDir` and empty sessions under the isolated DevGuard state. DevGuard does not import channel bindings, messaging configuration, source sessions, browser state, or source tool and sandbox overrides. A workspace is a default working directory, not a host isolation boundary.
+
+Static credentials with `copyToAgents: false` are not copied. Refreshable OAuth credentials require either provider-declared portability, an interactive confirmation, or an explicit noninteractive selection:
+
+```sh
+openclaw devguard init . --copy-oauth
+```
+
+Environment credentials such as `OPENAI_API_KEY` remain environment credentials and are inherited by the owned Gateway; DevGuard does not persist them merely to transfer the profile. Secret references remain references rather than being resolved into raw values. Existing credentials in isolated state win on profile-ID collisions.
+
+Skip all model configuration and authentication transfer while still importing selected agent workspaces:
+
+```sh
+openclaw devguard init . --agent ops --no-model-profile
+```
+
+Imported agent IDs are remembered in DevGuard's local project-state marker for repeated initialization. OAuth permission is not stored as portable project configuration.
+
 ## Run The Target
 
 ```sh
@@ -95,7 +133,7 @@ openclaw plugins inspect my-plugin --runtime --json
 openclaw agent --session-key devguard-smoke --message "Call an available tool" --json
 ```
 
-The isolated profile does not copy model credentials or general configuration from the normal profile. Configure a model or provide supported provider credentials before expecting an agent turn to run. Ambient channels remain disabled by design.
+The isolated profile imports only the model and agent surface described above; it does not copy general OpenClaw configuration. Ambient channels remain disabled by design.
 
 ## Logging And Deny Policy
 
@@ -131,15 +169,23 @@ openclaw devguard tail --json --no-follow
 
 ## CLI Reference
 
-| Command                                                | Behavior                                                   |
-| ------------------------------------------------------ | ---------------------------------------------------------- |
-| `openclaw devguard init [plugin-path]`                 | Initialize isolated state, build, validate, and inspect    |
-| `openclaw devguard run [--once] [--unsafe-raw-stream]` | Supervise and verify the target                            |
-| `openclaw devguard tail [--json] [--no-follow]`        | Follow or read current audit records                       |
-| `openclaw devguard doctor`                             | Aggregate configuration, live runtime, and OpenClaw checks |
-| `openclaw devguard restore`                            | Restore or remove managed state while preserving logs      |
+| Command                                                | Behavior                                                      |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| `openclaw devguard init [plugin-path] [options]`       | Import a source profile, initialize, build, validate, inspect |
+| `openclaw devguard run [--once] [--unsafe-raw-stream]` | Supervise and verify the target                               |
+| `openclaw devguard tail [--json] [--no-follow]`        | Follow or read current audit records                          |
+| `openclaw devguard doctor`                             | Aggregate configuration, live runtime, and OpenClaw checks    |
+| `openclaw devguard restore`                            | Restore or remove managed state while preserving logs         |
 
-Run `doctor` while the supervised Gateway is live. It reports every check rather than stopping at the first failure, including isolation, channel, sandbox, tool-policy, target identity, live build, runtime inspection, and OpenClaw plugin diagnostics.
+`init` options:
+
+| Option               | Behavior                                                      |
+| -------------------- | ------------------------------------------------------------- |
+| `--agent <id>`       | Import another source agent; repeat for additional agents     |
+| `--no-model-profile` | Skip source model configuration and authentication            |
+| `--copy-oauth`       | Explicitly copy otherwise non-portable refreshable OAuth data |
+
+Run `doctor` while the supervised Gateway is live. It reports every check rather than stopping at the first failure, including imported agent state, isolation, channel, sandbox, tool-policy, target identity, live build, runtime inspection, and OpenClaw plugin diagnostics.
 
 ```sh
 openclaw devguard doctor
@@ -166,4 +212,4 @@ Press `Ctrl-C` to stop the owned Gateway.
 
 ## Security Boundary
 
-DevGuard blocks OpenClaw tool calls, including read-only, unknown, and plugin-defined tools. It does not isolate imports, plugin registration, background workers, direct host access, or direct network access. `restore` reverses only DevGuard-managed isolated-profile state; it cannot undo side effects performed directly by plugin code. Use stronger host isolation for untrusted plugin code.
+DevGuard blocks OpenClaw tool calls, including read-only, unknown, and plugin-defined tools. It does not isolate imported workspaces, plugin imports, registration, background workers, direct host access, or direct network access. `restore` reverses only DevGuard-managed isolated-profile state; it cannot undo side effects performed directly by plugin code. Use stronger host isolation for untrusted plugin code.

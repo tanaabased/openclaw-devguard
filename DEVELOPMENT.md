@@ -88,8 +88,12 @@ The CI-first Leia scenarios under [`examples/`](./examples/) run as entries in t
 - generated-state removal and saved-config restoration
 - watched rebuild and verified Gateway replacement
 - live exec, write, and unknown-tool denial with audit redaction and correlation
+- source model and portable authentication import
+- selected agent workspace resolution with isolated agent and session state
 
 Do not run direct OpenClaw commands, plugin installation, Gateway startup, or Leia scenarios as routine local validation. Keep these machine-mutating operational and end-to-end checks in the pull-request workflow matrix.
+
+The manually dispatched `Live model test` workflow reuses the `model` Leia scenario for one real isolated-Gateway turn. It requires `TANAAB_ALTERNATE_MALE_KEY` and accepts the OpenAI model reference as a workflow input; it is not a pull-request gate.
 
 ## Release Model
 

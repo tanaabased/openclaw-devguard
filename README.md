@@ -53,7 +53,14 @@ openclaw devguard init .
 openclaw devguard run
 ```
 
-`init` applies to the target plugin in the supplied path. Running it inside this repository dogfoods DevGuard itself.
+`init` applies to the target plugin in the supplied path. By default it imports the active OpenClaw profile's default agent, model configuration, and portable authentication into isolated state. Add other configured agents by ID or opt out of model and credential transfer:
+
+```sh
+openclaw devguard init . --agent ops --agent qa
+openclaw devguard init . --no-model-profile
+```
+
+Running `init` inside this repository dogfoods DevGuard itself. See the [OpenClaw guide](./OPENCLAW.md#import-models-and-agents) for OAuth consent, workspace reuse, and the exact import boundary.
 
 ## Usage
 
