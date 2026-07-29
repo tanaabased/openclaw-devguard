@@ -4,6 +4,7 @@ import { type Logger } from '../lib/logger.ts';
 import registerDevguardCli, {
   collectOption,
   type CommandLike,
+  parseStartupTimeoutMs,
   runCliAction,
 } from '../lib/register-cli.ts';
 
@@ -66,7 +67,7 @@ describe('lib/register-cli', () => {
     );
     assert.deepEqual(
       new Set(findCommand(devguard, 'run').options),
-      new Set(['--unsafe-raw-stream', '--once']),
+      new Set(['--startup-timeout <seconds>', '--unsafe-raw-stream', '--once']),
     );
     assert.deepEqual(
       new Set(findCommand(devguard, 'tail').options),
@@ -76,6 +77,17 @@ describe('lib/register-cli', () => {
 
   it('should collect repeated agent options in command-line order', () => {
     assert.deepEqual(collectOption('ops', collectOption('main', [])), ['main', 'ops']);
+  });
+
+  it('should convert a positive startup timeout from seconds to milliseconds', () => {
+    assert.equal(parseStartupTimeoutMs(undefined), undefined);
+    assert.equal(parseStartupTimeoutMs('60'), 60_000);
+  });
+
+  it('should reject invalid startup timeouts', () => {
+    for (const value of ['0', '-1', '1.5', 'later']) {
+      assert.throws(() => parseStartupTimeoutMs(value), /positive whole number/);
+    }
   });
 
   it('should expose handlers for every implemented command', () => {

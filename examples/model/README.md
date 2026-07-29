@@ -42,7 +42,7 @@ dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 # should complete a live gateway turn with imported authentication
 unset OPENAI_API_KEY
 export OPENCLAW_GATEWAY_STARTUP_TRACE=1
-(cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$TMPDIR/plugin" && exec openclaw devguard run --startup-timeout 60 > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 90 "$(cat "$TMPDIR/run.pid")"
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json > "$TMPDIR/live-response.json"

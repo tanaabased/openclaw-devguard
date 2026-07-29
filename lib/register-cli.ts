@@ -44,6 +44,17 @@ export function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
+export function parseStartupTimeoutMs(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+
+  const seconds = Number(value);
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) {
+    throw new Error('--startup-timeout must be a positive whole number of seconds');
+  }
+
+  return seconds * 1_000;
+}
+
 export default function registerDevguardCli(
   program: CommandLike,
   options: RegisterDevguardCliOptions,
@@ -80,15 +91,24 @@ export default function registerDevguardCli(
   devguard
     .command('run')
     .description('Run a plugin under DevGuard supervision.')
+    .option(
+      '--startup-timeout <seconds>',
+      'Wait this many seconds for the Gateway to load the target plugin.',
+    )
     .option('--unsafe-raw-stream', 'Allow an unsafe raw event stream for debugging.')
     .option('--once', 'Build, verify the live Gateway, and exit.')
     .action(async (commandOptions: unknown) => {
-      const flags = (commandOptions ?? {}) as { once?: boolean; unsafeRawStream?: boolean };
+      const flags = (commandOptions ?? {}) as {
+        once?: boolean;
+        startupTimeout?: string;
+        unsafeRawStream?: boolean;
+      };
       await runCliAction(options.logger, 'run failed', async () => {
         await runDevguard(process.cwd(), {
           logger: options.logger,
           once: flags.once,
           output,
+          startupTimeoutMs: parseStartupTimeoutMs(flags.startupTimeout),
           unsafeRawStream: flags.unsafeRawStream,
         });
       });
