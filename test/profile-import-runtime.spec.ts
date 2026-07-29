@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import type { AuthProfileStore } from 'openclaw/plugin-sdk/agent-runtime';
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  replaceRuntimeAuthProfileStoreSnapshots,
+  resolveAgentDir,
+  resolvePersistedAuthProfileOwnerAgentDir,
+  saveAuthProfileStore,
+  type AuthProfileStore,
+} from 'openclaw/plugin-sdk/agent-runtime';
 import type { OpenClawConfig } from 'openclaw/plugin-sdk/config-runtime';
 
 import {
@@ -250,5 +260,65 @@ describe('lib/profile-import', () => {
         profiles: ['openai:default'],
       },
     ]);
+  });
+
+  it('should copy persisted source auth instead of an empty runtime snapshot', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'devguard-profile-import-'));
+    const sourceStateDirectory = join(root, 'source');
+    const destinationStateDirectory = join(root, 'destination');
+    const previousStateDirectory = process.env.OPENCLAW_STATE_DIR;
+    const previousConfigPath = process.env.OPENCLAW_CONFIG_PATH;
+    const profileId = 'openai:persisted';
+
+    try {
+      process.env.OPENCLAW_STATE_DIR = sourceStateDirectory;
+      delete process.env.OPENCLAW_CONFIG_PATH;
+      const sourceAgentDir = resolveAgentDir(sourceConfig, 'main', process.env);
+      await mkdir(sourceAgentDir, { recursive: true });
+      saveAuthProfileStore(
+        authStore({
+          [profileId]: {
+            type: 'api_key',
+            provider: 'openai',
+            key: 'persisted-key',
+          },
+        }),
+        sourceAgentDir,
+        { filterExternalAuthProfiles: true, syncExternalCli: false },
+      );
+      replaceRuntimeAuthProfileStoreSnapshots([
+        { agentDir: sourceAgentDir, store: emptyAuthProfileStore() },
+      ]);
+
+      const prepared = prepareProfileImport({
+        copyModelProfile: true,
+        destinationStateDirectory,
+        environment: { ...process.env },
+        dependencies: { loadSourceConfig: () => sourceConfig },
+      });
+      const resolved = resolveProfileImport(prepared, false);
+      assert.equal(resolved.auth.copied, 1);
+      assert.equal(resolved.auth.preserved, 0);
+
+      await applyProfileAuthImport(resolved);
+      const destinationAgentDir = resolveAgentDir({ agents: { list: [{ id: 'main' }] } }, 'main', {
+        ...process.env,
+        OPENCLAW_STATE_DIR: destinationStateDirectory,
+      });
+      assert.equal(
+        resolvePersistedAuthProfileOwnerAgentDir({
+          agentDir: destinationAgentDir,
+          profileId,
+        }),
+        destinationAgentDir,
+      );
+    } finally {
+      clearRuntimeAuthProfileStoreSnapshots();
+      if (previousStateDirectory === undefined) delete process.env.OPENCLAW_STATE_DIR;
+      else process.env.OPENCLAW_STATE_DIR = previousStateDirectory;
+      if (previousConfigPath === undefined) delete process.env.OPENCLAW_CONFIG_PATH;
+      else process.env.OPENCLAW_CONFIG_PATH = previousConfigPath;
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

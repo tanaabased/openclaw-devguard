@@ -1,14 +1,32 @@
 # Model Example
 
-This scenario verifies that initialization imports the source profile's default model and portable authentication into isolated DevGuard state.
+This scenario verifies that initialization imports an OpenAI-onboarded source profile's default model and portable authentication into isolated DevGuard state, then uses that copied authentication for a live turn.
 
 ## Setup
 
 ```bash
-# should prepare a source model profile and fixture plugin
+# should onboard the source profile with OpenAI and prepare a fixture plugin
 test -f "$DEVGUARD_PACKAGE"
+test -n "$OPENAI_API_KEY"
+test -n "$OPENAI_MODEL"
 cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
-node "$GITHUB_WORKSPACE/examples/support/profile.mjs" seed-model
+openclaw onboard --non-interactive --accept-risk \
+  --mode local \
+  --auth-choice openai-api-key \
+  --openai-api-key "$OPENAI_API_KEY" \
+  --secret-input-mode plaintext \
+  --workspace "$TMPDIR/source-main" \
+  --gateway-bind loopback \
+  --skip-daemon \
+  --skip-health \
+  --skip-bootstrap \
+  --skip-channels \
+  --skip-hooks \
+  --skip-search \
+  --skip-skills \
+  --skip-ui \
+  --suppress-gateway-token-output > "$TMPDIR/onboard.log" 2>&1
+openclaw models set "openai/$OPENAI_MODEL" >> "$TMPDIR/onboard.log" 2>&1
 
 # should install and enable packed devguard in the source profile
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
@@ -21,8 +39,7 @@ openclaw devguard init "$TMPDIR/plugin" > "$TMPDIR/init.log" 2>&1
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 
-# should complete an optional live gateway turn with imported authentication
-if [ -z "$DEVGUARD_LIVE_MODEL" ]; then exit 0; fi
+# should complete a live gateway turn with imported authentication
 unset OPENAI_API_KEY
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
@@ -39,20 +56,18 @@ node "$GITHUB_WORKSPACE/examples/support/profile.mjs" assert-model "$(cat "$TMPD
 
 # should report the imported model without exposing credential material
 grep -F "agents       main" "$TMPDIR/init.log"
-if [ -n "$DEVGUARD_LIVE_MODEL" ]; then grep -F "model        $DEVGUARD_LIVE_MODEL" "$TMPDIR/init.log"; else grep -F "model        openai/gpt-5.6-sol" "$TMPDIR/init.log"; fi
+grep -F "model        openai/$OPENAI_MODEL" "$TMPDIR/init.log"
 grep -F "auth         1 copied" "$TMPDIR/init.log"
-if grep -F "leia-model-key" "$TMPDIR/init.log"; then exit 1; fi
+if grep -Fq "$OPENAI_API_KEY" "$TMPDIR/init.log"; then exit 1; fi
 
-# should return the optional live model response
-if [ -z "$DEVGUARD_LIVE_MODEL" ]; then exit 0; fi
+# should return the live model response
 grep -F "DEVGUARD_MODEL_OK" "$TMPDIR/live-response.json"
 ```
 
 ## Cleanup
 
 ```bash
-# should stop optional live supervision
-if [ ! -f "$TMPDIR/run.pid" ]; then exit 0; fi
+# should stop live supervision
 kill -TERM "$(cat "$TMPDIR/run.pid")"
 node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
 ```

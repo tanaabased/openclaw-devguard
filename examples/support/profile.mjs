@@ -3,15 +3,14 @@ import { join } from 'node:path';
 
 import { clearConfigCache, loadConfig, writeConfigFile } from 'openclaw/plugin-sdk/config-runtime';
 import {
-  ensureAuthProfileStoreWithoutExternalProfiles,
+  loadAuthProfileStoreWithoutExternalProfiles,
   resolveAgentDir,
   resolveAgentEffectiveModelPrimary,
   resolveAgentWorkspaceDir,
-  saveAuthProfileStore,
 } from 'openclaw/plugin-sdk/agent-runtime';
 
-const MODEL_REF = process.env.DEVGUARD_LIVE_MODEL || 'openai/gpt-5.6-sol';
-const PROFILE_ID = 'openai:devguard-leia';
+const MODEL_REF = `openai/${process.env.OPENAI_MODEL || 'gpt-5-nano-2025-08-07'}`;
+const PROFILE_ID = 'openai:api-key';
 const PROFILE_KEY = process.env.OPENAI_API_KEY || 'leia-model-key';
 
 function requireArgument(value, label) {
@@ -23,36 +22,6 @@ function useStateDirectory(stateDirectory) {
   process.env.OPENCLAW_STATE_DIR = stateDirectory;
   delete process.env.OPENCLAW_CONFIG_PATH;
   clearConfigCache();
-}
-
-async function seedModel() {
-  const stateDirectory = requireArgument(process.env.OPENCLAW_STATE_DIR, 'OPENCLAW_STATE_DIR');
-  const temporaryDirectory = requireArgument(process.env.TMPDIR, 'TMPDIR');
-  const workspace = join(temporaryDirectory, 'source-main');
-  const config = {
-    agents: { defaults: { model: MODEL_REF, workspace } },
-    auth: {
-      profiles: { [PROFILE_ID]: { provider: 'openai', mode: 'api_key' } },
-      order: { openai: [PROFILE_ID] },
-    },
-  };
-
-  await mkdir(workspace, { recursive: true });
-  useStateDirectory(stateDirectory);
-  await writeConfigFile(config);
-  const agentDir = resolveAgentDir(config, 'main', process.env);
-  await mkdir(agentDir, { recursive: true, mode: 0o700 });
-  saveAuthProfileStore(
-    {
-      version: 1,
-      profiles: {
-        [PROFILE_ID]: { type: 'api_key', provider: 'openai', key: PROFILE_KEY },
-      },
-      order: { openai: [PROFILE_ID] },
-    },
-    agentDir,
-    { filterExternalAuthProfiles: true, syncExternalCli: false },
-  );
 }
 
 async function seedAgent() {
@@ -81,10 +50,8 @@ function loadStateConfig(stateDirectory) {
 
 function loadAgentAuth(config, agentId) {
   const agentDir = resolveAgentDir(config, agentId, process.env);
-  return ensureAuthProfileStoreWithoutExternalProfiles(agentDir, {
+  return loadAuthProfileStoreWithoutExternalProfiles(agentDir, {
     allowKeychainPrompt: false,
-    readOnly: true,
-    syncExternalCli: false,
   });
 }
 
@@ -150,9 +117,6 @@ async function assertAgent(destinationStateDirectory, sourceStateDirectory) {
 const [action, ...args] = process.argv.slice(2);
 
 switch (action) {
-  case 'seed-model':
-    await seedModel();
-    break;
   case 'seed-agent':
     await seedAgent();
     break;

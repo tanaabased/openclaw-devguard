@@ -3,14 +3,15 @@ import { dirname, resolve } from 'node:path';
 
 import {
   DEFAULT_PROVIDER,
-  ensureAuthProfileStoreWithoutExternalProfiles,
   listAgentEntries,
   listAgentIds,
+  loadAuthProfileStoreWithoutExternalProfiles,
   resolveAgentDir,
   resolveAgentEffectiveModelPrimary,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   resolveEnvApiKey,
+  resolvePersistedAuthProfileOwnerAgentDir,
   saveAuthProfileStore,
   type AuthProfileStore,
 } from 'openclaw/plugin-sdk/agent-runtime';
@@ -82,12 +83,49 @@ export interface ResolvedProfileImport {
 
 const emptyStore = (): AuthProfileStore => ({ version: 1, profiles: {} });
 
-function defaultLoadAuthStore(agentDir: string): AuthProfileStore {
-  return ensureAuthProfileStoreWithoutExternalProfiles(agentDir, {
+function defaultLoadSourceAuthStore(agentDir: string): AuthProfileStore {
+  return loadAuthProfileStoreWithoutExternalProfiles(agentDir, {
     allowKeychainPrompt: false,
-    readOnly: true,
-    syncExternalCli: false,
   });
+}
+
+function defaultLoadDestinationAuthStore(agentDir: string): AuthProfileStore {
+  const inherited = loadAuthProfileStoreWithoutExternalProfiles(agentDir, {
+    allowKeychainPrompt: false,
+  });
+  const localProfileIds = new Set(
+    Object.keys(inherited.profiles).filter((profileId) => {
+      const owner = resolvePersistedAuthProfileOwnerAgentDir({ agentDir, profileId });
+      return owner !== undefined && resolve(owner) === resolve(agentDir);
+    }),
+  );
+  const profiles = Object.fromEntries(
+    Object.entries(inherited.profiles).filter(([profileId]) => localProfileIds.has(profileId)),
+  );
+  const order = Object.fromEntries(
+    Object.entries(inherited.order ?? {}).flatMap(([provider, profileIds]) => {
+      const selected = profileIds.filter((profileId) => localProfileIds.has(profileId));
+      return selected.length > 0 ? [[provider, selected]] : [];
+    }),
+  );
+  const lastGood = Object.fromEntries(
+    Object.entries(inherited.lastGood ?? {}).filter(([, profileId]) =>
+      localProfileIds.has(profileId),
+    ),
+  );
+  const usageStats = Object.fromEntries(
+    Object.entries(inherited.usageStats ?? {}).filter(([profileId]) =>
+      localProfileIds.has(profileId),
+    ),
+  );
+
+  return {
+    version: inherited.version,
+    profiles,
+    ...(Object.keys(order).length > 0 ? { order } : {}),
+    ...(Object.keys(lastGood).length > 0 ? { lastGood } : {}),
+    ...(Object.keys(usageStats).length > 0 ? { usageStats } : {}),
+  };
 }
 
 function defaultSaveAuthStore(store: AuthProfileStore, agentDir: string): void {
@@ -225,7 +263,8 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
     throw new Error('DevGuard source and isolated profile state resolve to the same path');
   }
   const sourceConfig = (dependencies.loadSourceConfig ?? loadConfig)();
-  const loadAuthStore = dependencies.loadAuthStore ?? defaultLoadAuthStore;
+  const loadSourceAuthStore = dependencies.loadAuthStore ?? defaultLoadSourceAuthStore;
+  const loadDestinationAuthStore = dependencies.loadAuthStore ?? defaultLoadDestinationAuthStore;
   const defaultAgentId = resolveDefaultAgentId(sourceConfig);
   const requestedAgentIds = normalizeAgentIds(options.agentIds);
   const availableAgentIds = new Set(listAgentIds(sourceConfig));
@@ -280,8 +319,8 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
         ? {
             modelEntries: selectedModelEntries(sourceConfig, configuredEntries.get(agentId), refs),
             providers,
-            sourceAuthStore: loadAuthStore(sourceAgentDir),
-            destinationAuthStore: loadAuthStore(destinationAgentDir),
+            sourceAuthStore: loadSourceAuthStore(sourceAgentDir),
+            destinationAuthStore: loadDestinationAuthStore(destinationAgentDir),
           }
         : { providers }),
     };
