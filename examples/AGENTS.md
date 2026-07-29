@@ -9,7 +9,7 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Keep executable commands inside the `Setup` and `Testing` fenced blocks.
 - Prefer checked-in fixtures over README commands or helper scripts that synthesize static, deterministic input state.
 - Keep scenario-owned fixtures directly beside their README; do not add a scenario-local `fixtures/` directory when the scenario directory already establishes ownership.
-- Use root `fixtures/` only for a suite-level fixture shared across multiple examples or explicitly established for concrete near-term shared use.
+- Use root `fixtures/` only for suite-level inputs shared across multiple examples or explicitly established for concrete near-term shared use.
 - Reuse a repository-owned product asset directly when it is itself the test input; do not duplicate it as an example-only fixture.
 - Keep real product registration, onboarding, and mutation commands when their supported behavior is part of the scenario contract; use fixtures to prepare inputs, not to bypass the public surface under test.
 - Prefer direct `command | grep` assertions when one required command invocation has one output assertion; command cost alone is not a reason to persist its output.
@@ -24,8 +24,10 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Use lowercase behavior prose unless exact command, flag, environment, product, or file casing is part of the contract.
 - Do not use literal backticks or braced shell expansions inside executable blocks.
 - Keep immediate child directories limited to matrix-backed scenario names; `AGENTS.md` and `package.json` remain root boundary files.
-- Use root `fixtures/devguard-example-plugin` for the shared target-plugin path and root `fixtures/devbot-agent-workspace` for shared credential-free agent context; do not add `examples/fixtures` or `examples/support`.
+- Dogfood the DevGuard repository as the target when another plugin's behavior is incidental to the scenario.
+- Keep the separate target plugin directly in `examples/plugin`; extend that scenario when a real external-plugin flow needs additional tools, hooks, configuration, or lifecycle behavior.
+- Use root `fixtures/devbot-agent-workspace` for shared credential-free agent context; do not add `examples/fixtures` or `examples/support`.
 - Keep the Devbot fixture free of config, auth, sessions, memory, and generated bootstrap state; populate its `assets/devbot.png` reference from the repository-owned asset at scenario runtime.
-- Keep dogfooding DevGuard itself on its separate self-link path.
+- Keep test-only probe methods in the scenario-owned example plugin rather than the published DevGuard plugin.
 - Run these scenarios in CI by default; do not run them locally unless the user explicitly requests operational validation.
 - Omit cleanup-only teardown on ephemeral CI runners. Add a cleanup phase only when teardown behavior is part of the contract or the suite operates on persistent state.

@@ -1,15 +1,14 @@
 # Model Example
 
-This scenario verifies that initialization imports an OpenAI-onboarded source profile's default model and portable authentication into isolated DevGuard state, then uses that copied authentication for a live turn.
+This scenario dogfoods DevGuard's self-target path while verifying that initialization imports an OpenAI-onboarded source profile's default model and portable authentication, then uses that copied authentication for a live turn.
 
 ## Setup
 
 ```bash
-# should onboard the source profile with OpenAI and prepare a fixture plugin
+# should onboard the source profile with OpenAI and prepare devguard as the target
 test -f "$DEVGUARD_PACKAGE"
 test -n "$OPENAI_API_KEY"
 test -n "$OPENAI_MODEL"
-cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw onboard --non-interactive --accept-risk \
   --mode local \
   --auth-choice openai-api-key \
@@ -33,9 +32,9 @@ openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 cp "$OPENCLAW_STATE_DIR/openclaw.json" "$TMPDIR/source-before.json"
 
-# should initialize the fixture with the source model profile
+# should initialize devguard with the source model profile
 unset OPENAI_API_KEY
-openclaw devguard init "$TMPDIR/plugin" > "$TMPDIR/init.log" 2>&1
+openclaw devguard init "$GITHUB_WORKSPACE" > "$TMPDIR/init.log" 2>&1
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
@@ -43,7 +42,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 
 # should start a live gateway with imported authentication
 unset OPENAI_API_KEY
-(cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 90 "$(cat "$TMPDIR/run.pid")"
 ```

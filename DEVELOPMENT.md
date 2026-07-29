@@ -80,6 +80,8 @@ The release package test builds the plugin, validates its metadata, creates an n
 
 The CI-first Leia scenarios under [`examples/`](./examples/) run as entries in the existing macOS and Ubuntu example matrix. They cover:
 
+Most scenarios dogfood the repository through DevGuard's supported self-target path. The [`plugin`](./examples/plugin/) scenario owns the separate example plugin and should grow with real external-plugin tools, hooks, configuration, and lifecycle flows that do not belong in the published DevGuard plugin.
+
 - packed installation and CLI discovery
 - repeated target initialization
 - one bounded supervised run

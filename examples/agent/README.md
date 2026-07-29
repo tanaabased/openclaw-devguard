@@ -1,13 +1,12 @@
 # Agent Example
 
-This scenario registers a Devbot workspace without persisting its identity in the source profile, then verifies that DevGuard loads the workspace identity only into isolated state and exposes it through the live Gateway.
+This scenario dogfoods DevGuard's self-target path while registering a Devbot workspace without persisting its identity in the source profile, then verifies that DevGuard loads the workspace identity only into isolated state and exposes it through the live Gateway.
 
 ## Setup
 
 ```bash
-# should prepare the devbot workspace and fixture plugin
+# should prepare the devbot workspace and devguard target
 test -f "$DEVGUARD_PACKAGE"
-cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 cp -R "$GITHUB_WORKSPACE/fixtures/devbot-agent-workspace" "$TMPDIR/source-devbot"
 mkdir -p "$TMPDIR/source-devbot/assets"
 cp "$GITHUB_WORKSPACE/assets/devbot.png" "$TMPDIR/source-devbot/assets/devbot.png"
@@ -27,15 +26,15 @@ openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 cp "$OPENCLAW_STATE_DIR/openclaw.json" "$TMPDIR/source-before.json"
 
-# should initialize the fixture with an additional agent and no model transfer
-openclaw devguard init "$TMPDIR/plugin" --agent devbot --no-model-profile > "$TMPDIR/init.log" 2>&1
+# should initialize devguard with an additional agent and no model transfer
+openclaw devguard init "$GITHUB_WORKSPACE" --agent devbot --no-model-profile > "$TMPDIR/init.log" 2>&1
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start the isolated gateway with the imported workspace identity
-(cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 60 "$(cat "$TMPDIR/run.pid")"
 ```

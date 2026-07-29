@@ -1,16 +1,24 @@
-# Deny Example
+# Plugin Example
 
-This scenario sends deterministic tool attempts through OpenClaw's live before-tool-call policy chain and verifies terminal denial.
+This scenario uses packed DevGuard to supervise a separate linked plugin, verifies its inferred project configuration and live identity, and sends deterministic tool attempts through OpenClaw's policy chain.
 
 ## Setup
 
 ```bash
-# should prepare and initialize the policy probe fixture
+# should prepare the scenario-owned target plugin
 test -f "$DEVGUARD_PACKAGE"
-cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
+mkdir -p "$TMPDIR/plugin"
+cp "$GITHUB_WORKSPACE/examples/plugin/index.ts" "$GITHUB_WORKSPACE/examples/plugin/openclaw.plugin.json" "$GITHUB_WORKSPACE/examples/plugin/package.json" "$TMPDIR/plugin"
+
+# should install and enable packed devguard
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
-openclaw devguard init "$TMPDIR/plugin"
+
+# should create and then reuse the target project configuration
+set -o pipefail
+openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "created"
+set -o pipefail
+openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "reused"
 find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
@@ -25,6 +33,14 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 ## Testing
 
 ```bash
+# should infer, build, and expose the separate target plugin
+set -o pipefail
+grep -F '"id"' "$TMPDIR/plugin/devguard.json" | grep -F '"devguard-example"'
+test -f "$TMPDIR/plugin/dist/index.js"
+(cd "$TMPDIR/plugin" && openclaw devguard doctor) > "$TMPDIR/doctor.log" 2>&1
+grep -F "pass" "$TMPDIR/doctor.log" | grep -F "target plugin id"
+grep -F "pass" "$TMPDIR/doctor.log" | grep -F "live target plugin"
+
 # should block exec through the live openclaw policy chain
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw gateway call devguard-example.attempt-tool --json --params '{"toolName":"exec"}' > "$TMPDIR/exec-result.json"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-blocked "$TMPDIR/exec-result.json"

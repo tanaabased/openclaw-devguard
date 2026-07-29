@@ -28,7 +28,7 @@ jobs:
           - doctor
           - restore
           - restart
-          - deny
+          - plugin
           - model
           - agent
     steps:
