@@ -10,7 +10,10 @@ const stateConfig = {
     port: 19_001,
   },
   tools: { exec: { mode: 'deny' }, elevated: { enabled: false } },
-  agents: { defaults: { sandbox: { mode: 'all', workspaceAccess: 'none' } } },
+  agents: {
+    defaults: { sandbox: { mode: 'all', workspaceAccess: 'none' } },
+    list: [{ id: 'main', agentDir: '/devguard/state/agents/main/agent' }],
+  },
 };
 
 describe('utils/doctor-checks', () => {
@@ -28,6 +31,7 @@ describe('utils/doctor-checks', () => {
         policyMode: 'deny',
         stateDirectory: '/devguard/state',
       },
+      importedAgentIds: ['main'],
       initialized: true,
       latestBuildId: 'build-1',
       manifestId: 'example-plugin',
@@ -37,7 +41,7 @@ describe('utils/doctor-checks', () => {
       stateConfig,
     });
 
-    assert.equal(checks.length, 18);
+    assert.equal(checks.length, 20);
     assert.deepEqual(
       checks.filter(({ ok }) => !ok),
       [],
@@ -60,6 +64,8 @@ describe('utils/doctor-checks', () => {
 
     const failed = new Set(checks.filter(({ ok }) => !ok).map(({ id }) => id));
     assert.ok(failed.has('initialized'));
+    assert.ok(failed.has('profile-import'));
+    assert.ok(failed.has('agent-state-isolated'));
     assert.ok(failed.has('profile-isolated'));
     assert.ok(failed.has('gateway-reachable'));
     assert.ok(failed.has('guard-active'));

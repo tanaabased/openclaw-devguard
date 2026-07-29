@@ -35,7 +35,10 @@ describe('cli/doctor', () => {
         port: 19_001,
       },
       tools: { exec: { mode: 'deny' }, elevated: { enabled: false } },
-      agents: { defaults: { sandbox: { mode: 'all', workspaceAccess: 'none' } } },
+      agents: {
+        defaults: { sandbox: { mode: 'all', workspaceAccess: 'none' } },
+        list: [{ id: 'main', agentDir: join(paths.stateDirectory, 'agents/main/agent') }],
+      },
     };
 
     try {
@@ -46,7 +49,10 @@ describe('cli/doctor', () => {
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(join(root, 'openclaw.plugin.json'), JSON.stringify({ id: 'example-plugin' })),
-        writeFile(join(paths.projectStateRoot, 'init.json'), '{}'),
+        writeFile(
+          join(paths.projectStateRoot, 'init.json'),
+          JSON.stringify({ profileImport: { agentIds: ['main'] } }),
+        ),
         writeFile(join(paths.projectStateRoot, 'gateway-token'), 'gateway-secret\n'),
         writeFile(join(paths.stateDirectory, 'openclaw.json'), JSON.stringify(stateConfig)),
         writeFile(
@@ -88,18 +94,22 @@ describe('cli/doctor', () => {
               output: JSON.stringify(stateConfig.agents.defaults.sandbox),
             };
           }
+          if (args[0] === 'config' && args[2] === 'agents.list') {
+            return { code: 0, output: JSON.stringify(stateConfig.agents.list) };
+          }
           return { code: 0, output: '{}' };
         },
         styles: createCliStyles({ NO_COLOR: '' }),
       });
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 18);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 20);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
       assert.deepEqual(commands, [
         ['config', 'get', 'gateway', '--json'],
         ['config', 'get', 'tools', '--json'],
         ['config', 'get', 'agents.defaults.sandbox', '--json'],
+        ['config', 'get', 'agents.list', '--json'],
         ['plugins', 'inspect', 'example-plugin', '--runtime', '--json'],
         ['plugins', 'doctor'],
       ]);

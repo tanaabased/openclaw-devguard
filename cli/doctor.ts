@@ -74,6 +74,22 @@ function commandJson(result: Attempt<ProcessCommandResult>): Attempt<unknown> {
   }
 }
 
+function importedAgentIds(marker: Attempt<string>): Attempt<string[]> {
+  if (!marker.value) return { error: marker.error ?? 'initialization marker is missing' };
+  try {
+    const value = JSON.parse(marker.value) as {
+      profileImport?: { agentIds?: unknown };
+    };
+    const agentIds = value.profileImport?.agentIds;
+    if (!Array.isArray(agentIds) || agentIds.some((agentId) => typeof agentId !== 'string')) {
+      return { error: 'initialization marker does not contain imported agents' };
+    }
+    return { value: agentIds };
+  } catch (error) {
+    return { error: `could not parse initialization marker: ${errorMessage(error)}` };
+  }
+}
+
 export default async function doctorDevguard(
   projectRoot: string,
   options: DoctorDevguardOptions,
@@ -100,6 +116,7 @@ export default async function doctorDevguard(
     gatewayConfigResult,
     toolsConfigResult,
     sandboxConfigResult,
+    agentsConfigResult,
     manifest,
     log,
     runtimeInspection,
@@ -121,6 +138,12 @@ export default async function doctorDevguard(
     ),
     attempt(() =>
       runCommand('openclaw', ['config', 'get', 'agents.defaults.sandbox', '--json'], {
+        allowFailure: true,
+        env: isolatedEnvironment,
+      }),
+    ),
+    attempt(() =>
+      runCommand('openclaw', ['config', 'get', 'agents.list', '--json'], {
         allowFailure: true,
         env: isolatedEnvironment,
       }),
@@ -147,17 +170,21 @@ export default async function doctorDevguard(
   const gatewayConfig = commandJson(gatewayConfigResult);
   const toolsConfig = commandJson(toolsConfigResult);
   const sandboxConfig = commandJson(sandboxConfigResult);
+  const agentsConfig = commandJson(agentsConfigResult);
+  const profileImport = importedAgentIds(marker);
   const stateConfig =
     gatewayConfig.value !== undefined &&
     toolsConfig.value !== undefined &&
-    sandboxConfig.value !== undefined
+    sandboxConfig.value !== undefined &&
+    agentsConfig.value !== undefined
       ? {
           gateway: gatewayConfig.value,
           tools: toolsConfig.value,
-          agents: { defaults: { sandbox: sandboxConfig.value } },
+          agents: { defaults: { sandbox: sandboxConfig.value }, list: agentsConfig.value },
         }
       : undefined;
-  const stateConfigError = gatewayConfig.error ?? toolsConfig.error ?? sandboxConfig.error;
+  const stateConfigError =
+    gatewayConfig.error ?? toolsConfig.error ?? sandboxConfig.error ?? agentsConfig.error;
 
   const queryStatus =
     options.queryStatus ??
@@ -186,6 +213,7 @@ export default async function doctorDevguard(
     expectedStateDirectory: paths.stateDirectory,
     gatewayError: gatewayStatus.error,
     gatewayStatus: gatewayStatus.value as GatewayStatus | undefined,
+    importedAgentIds: profileImport.value,
     initialized: marker.value !== undefined,
     latestBuildId: log.value ? latestSuccessfulBuildId(log.value) : undefined,
     manifestError: manifest.error,
@@ -194,6 +222,7 @@ export default async function doctorDevguard(
       ? commandDetail(doctorResult, `openclaw plugins doctor exited ${doctorResult.code}`)
       : pluginDoctor.error,
     pluginDoctorOk: doctorResult?.code === 0,
+    profileImportError: profileImport.error,
     productionStateDirectory: resolve(join(homedir(), '.openclaw')),
     runtimeInspectionDetail: runtimeResult
       ? commandDetail(runtimeResult, `runtime inspection exited ${runtimeResult.code}`)

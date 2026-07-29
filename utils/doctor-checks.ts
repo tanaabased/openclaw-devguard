@@ -21,12 +21,14 @@ export interface DoctorCheckInput {
   expectedStateDirectory: string;
   gatewayError?: string;
   gatewayStatus?: DoctorGatewayStatus;
+  importedAgentIds?: string[];
   initialized: boolean;
   latestBuildId?: string;
   manifestError?: string;
   manifestId?: string;
   pluginDoctorDetail?: string;
   pluginDoctorOk: boolean;
+  profileImportError?: string;
   productionStateDirectory: string;
   runtimeInspectionDetail?: string;
   runtimeInspectionOk: boolean;
@@ -63,9 +65,37 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
     nestedValue(stateConfig, ['agents', 'defaults', 'sandbox', 'workspaceAccess']) === 'none';
   const elevatedDisabled = nestedValue(stateConfig, ['tools', 'elevated', 'enabled']) === false;
   const execDenied = nestedValue(stateConfig, ['tools', 'exec', 'mode']) === 'deny';
+  const configuredAgents = nestedValue(stateConfig, ['agents', 'list']);
+  const importedAgentIds = input.importedAgentIds ?? [];
+  const agentStateIsolated =
+    Array.isArray(configuredAgents) &&
+    importedAgentIds.length > 0 &&
+    importedAgentIds.every((agentId) =>
+      configuredAgents.some((value) => {
+        if (value === null || Array.isArray(value) || typeof value !== 'object') return false;
+        const agent = value as Record<string, unknown>;
+        return (
+          agent.id === agentId &&
+          typeof agent.agentDir === 'string' &&
+          agent.agentDir.startsWith(`${input.expectedStateDirectory}/agents/`)
+        );
+      }),
+    );
 
   return [
     check('initialized', 'initialized state', input.initialized, 'run devguard init first'),
+    check(
+      'profile-import',
+      'source profile imported',
+      importedAgentIds.length > 0,
+      input.profileImportError ?? 'run devguard init again',
+    ),
+    check(
+      'agent-state-isolated',
+      'agent state isolated',
+      agentStateIsolated,
+      importedAgentIds.join(', ') || undefined,
+    ),
     check('profile-isolated', 'isolated profile', isolated, input.expectedStateDirectory),
     check('state-config', 'state configuration', stateConfig !== undefined, input.stateConfigError),
     check(
