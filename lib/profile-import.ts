@@ -25,6 +25,7 @@ import {
 } from '../utils/profile-import.ts';
 
 type AgentEntry = NonNullable<NonNullable<OpenClawConfig['agents']>['list']>[number];
+type AgentIdentity = NonNullable<AgentEntry['identity']>;
 type AgentModelConfig = NonNullable<AgentEntry['model']>;
 
 export interface ProfileImportDependencies {
@@ -47,6 +48,7 @@ interface PreparedAgentImport {
   destinationAgentDir: string;
   destinationAuthStore?: AuthProfileStore;
   id: string;
+  identity?: AgentIdentity;
   model?: AgentModelConfig;
   modelEntries?: NonNullable<AgentEntry['models']>;
   providers: string[];
@@ -227,6 +229,7 @@ function profileConfigPatch(
         ...(agent.default ? { default: true } : {}),
         workspace: agent.workspace,
         agentDir: agent.destinationAgentDir,
+        ...(agent.identity ? { identity: structuredClone(agent.identity) } : {}),
         ...(agent.model ? { model: structuredClone(agent.model) } : {}),
         ...(agent.modelEntries ? { models: structuredClone(agent.modelEntries) } : {}),
       })),
@@ -280,8 +283,9 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
     listAgentEntries(sourceConfig).map((entry) => [entry.id, entry]),
   );
   const agents = selectedAgentIds.map((agentId): PreparedAgentImport => {
+    const configuredEntry = configuredEntries.get(agentId);
     const rawModel = options.copyModelProfile
-      ? (configuredEntries.get(agentId)?.model ?? sourceConfig.agents?.defaults?.model)
+      ? (configuredEntry?.model ?? sourceConfig.agents?.defaults?.model)
       : undefined;
     const primary = options.copyModelProfile
       ? resolveAgentEffectiveModelPrimary(sourceConfig, agentId)
@@ -314,10 +318,11 @@ export function prepareProfileImport(options: PrepareProfileImportOptions): Prep
       workspace: resolveAgentWorkspaceDir(sourceConfig, agentId, options.environment),
       sourceAgentDir,
       destinationAgentDir,
+      ...(configuredEntry?.identity ? { identity: structuredClone(configuredEntry.identity) } : {}),
       ...(model ? { model } : {}),
       ...(options.copyModelProfile
         ? {
-            modelEntries: selectedModelEntries(sourceConfig, configuredEntries.get(agentId), refs),
+            modelEntries: selectedModelEntries(sourceConfig, configuredEntry, refs),
             providers,
             sourceAuthStore: loadSourceAuthStore(sourceAgentDir),
             destinationAuthStore: loadDestinationAuthStore(destinationAgentDir),

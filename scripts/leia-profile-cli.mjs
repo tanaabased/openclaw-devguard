@@ -1,7 +1,7 @@
-import { access, mkdir, readdir } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { clearConfigCache, loadConfig, writeConfigFile } from 'openclaw/plugin-sdk/config-runtime';
+import { clearConfigCache, loadConfig } from 'openclaw/plugin-sdk/config-runtime';
 import {
   loadAuthProfileStoreWithoutExternalProfiles,
   resolveAgentDir,
@@ -12,6 +12,8 @@ import {
 const MODEL_REF = `openai/${process.env.OPENAI_MODEL || 'gpt-5.4-nano'}`;
 const PROFILE_ID = 'openai:api-key';
 const PROFILE_KEY = process.env.OPENAI_API_KEY || 'leia-model-key';
+const ADDITIONAL_AGENT_ID = 'devbot';
+const IDENTITY_FIELDS = ['name', 'theme', 'emoji', 'avatar'];
 
 function requireArgument(value, label) {
   if (!value) throw new Error(`${label} is required`);
@@ -22,25 +24,6 @@ function useStateDirectory(stateDirectory) {
   process.env.OPENCLAW_STATE_DIR = stateDirectory;
   delete process.env.OPENCLAW_CONFIG_PATH;
   clearConfigCache();
-}
-
-async function seedAgent() {
-  const stateDirectory = requireArgument(process.env.OPENCLAW_STATE_DIR, 'OPENCLAW_STATE_DIR');
-  const temporaryDirectory = requireArgument(process.env.TMPDIR, 'TMPDIR');
-  const config = {
-    agents: {
-      list: [
-        { id: 'main', default: true, workspace: join(temporaryDirectory, 'source-main') },
-        { id: 'ops', workspace: join(temporaryDirectory, 'source-ops') },
-      ],
-    },
-  };
-
-  await Promise.all(
-    config.agents.list.map(({ workspace }) => mkdir(workspace, { recursive: true })),
-  );
-  useStateDirectory(stateDirectory);
-  await writeConfigFile(config);
 }
 
 function loadStateConfig(stateDirectory) {
@@ -89,10 +72,10 @@ async function assertAgent(destinationStateDirectory, sourceStateDirectory) {
   const destinationConfig = loadStateConfig(destinationStateDirectory);
   const sourceConfig = loadStateConfig(sourceStateDirectory);
   const agents = destinationConfig.agents?.list ?? [];
-  if (agents.map(({ id }) => id).join(',') !== 'main,ops') {
+  if (agents.map(({ id }) => id).join(',') !== `main,${ADDITIONAL_AGENT_ID}`) {
     throw new Error('isolated profile did not import the selected agents');
   }
-  for (const agentId of ['main', 'ops']) {
+  for (const agentId of ['main', ADDITIONAL_AGENT_ID]) {
     const destinationWorkspace = resolveAgentWorkspaceDir(destinationConfig, agentId, process.env);
     useStateDirectory(sourceStateDirectory);
     const sourceWorkspace = resolveAgentWorkspaceDir(sourceConfig, agentId, process.env);
@@ -111,15 +94,30 @@ async function assertAgent(destinationStateDirectory, sourceStateDirectory) {
   if (destinationConfig.channels !== undefined || destinationConfig.bindings !== undefined) {
     throw new Error('isolated agent import included messaging configuration');
   }
-  await access(resolveAgentWorkspaceDir(destinationConfig, 'ops', process.env));
+  const destinationAgent = agents.find(({ id }) => id === ADDITIONAL_AGENT_ID);
+  const sourceAgent = sourceConfig.agents?.list?.find(({ id }) => id === ADDITIONAL_AGENT_ID);
+  if (
+    sourceAgent?.identity?.name !== 'Devbot' ||
+    sourceAgent.identity.avatar !== 'assets/devbot.png'
+  ) {
+    throw new Error('source devbot identity was not loaded from its workspace');
+  }
+  if (!destinationAgent?.identity) {
+    throw new Error('isolated devbot identity was not imported');
+  }
+  for (const field of IDENTITY_FIELDS) {
+    if (destinationAgent?.identity?.[field] !== sourceAgent?.identity?.[field]) {
+      throw new Error(`isolated ${ADDITIONAL_AGENT_ID} identity did not retain ${field}`);
+    }
+  }
+  const workspace = resolveAgentWorkspaceDir(destinationConfig, ADDITIONAL_AGENT_ID, process.env);
+  await access(join(workspace, 'IDENTITY.md'));
+  await access(join(workspace, 'assets', 'devbot.png'));
 }
 
 const [action, ...args] = process.argv.slice(2);
 
 switch (action) {
-  case 'seed-agent':
-    await seedAgent();
-    break;
   case 'assert-model':
     await assertModel(
       requireArgument(args[0], 'destination state'),

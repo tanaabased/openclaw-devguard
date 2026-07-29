@@ -32,7 +32,19 @@ const sourceConfig: OpenClawConfig = {
     },
     list: [
       { id: 'main', default: true, workspace: '/source/workspaces/main' },
-      { id: 'ops', workspace: '/source/workspaces/ops', model: 'openai/model-ops' },
+      {
+        id: 'ops',
+        workspace: '/source/workspaces/ops',
+        identity: {
+          name: 'Ops',
+          theme: 'debugging',
+          emoji: '🤖',
+          avatar: 'assets/ops.png',
+        },
+        model: 'openai/model-ops',
+        sandbox: { mode: 'off' },
+        tools: { allow: ['exec'] },
+      },
     ],
   },
   auth: {
@@ -105,6 +117,15 @@ describe('lib/profile-import', () => {
     );
     assert.equal(patch.agents?.list?.[0]?.tools, undefined);
     assert.equal(patch.agents?.list?.[0]?.sandbox, undefined);
+    assert.equal(patch.agents?.list?.[1]?.tools, undefined);
+    assert.equal(patch.agents?.list?.[1]?.sandbox, undefined);
+    assert.deepEqual(patch.agents?.list?.[1]?.identity, {
+      name: 'Ops',
+      theme: 'debugging',
+      emoji: '🤖',
+      avatar: 'assets/ops.png',
+    });
+    assert.notEqual(patch.agents?.list?.[1]?.identity, sourceConfig.agents?.list?.[1]?.identity);
     assert.deepEqual(Object.keys(patch.models?.providers ?? {}).sort(), ['openai', 'other']);
     assert.equal(resolved.auth.copied, 2);
   });
