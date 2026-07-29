@@ -7,7 +7,7 @@ This scenario verifies generated-state removal, saved-config restoration, log pr
 ```bash
 # should prepare and initialize the fixture plugin
 test -f "$DEVGUARD_PACKAGE"
-cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
+cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$TMPDIR/plugin"

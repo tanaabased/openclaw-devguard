@@ -7,8 +7,8 @@ This scenario verifies that a repeatable agent selection resolves source workspa
 ```bash
 # should prepare source agents and the fixture plugin
 test -f "$DEVGUARD_PACKAGE"
-cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
-node "$GITHUB_WORKSPACE/examples/support/profile.mjs" seed-agent
+cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
+node "$GITHUB_WORKSPACE/scripts/leia-profile-cli.mjs" seed-agent
 
 # should install and enable packed devguard in the source profile
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
@@ -26,7 +26,7 @@ dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 ```bash
 # should retain source workspaces while isolating agent state and sessions
 cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
-node "$GITHUB_WORKSPACE/examples/support/profile.mjs" assert-agent "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
+node "$GITHUB_WORKSPACE/scripts/leia-profile-cli.mjs" assert-agent "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
 
 # should report both agents and the disabled model transfer
 grep -F "agents       main, ops" "$TMPDIR/init.log"

@@ -9,7 +9,7 @@ This scenario verifies that initialization imports an OpenAI-onboarded source pr
 test -f "$DEVGUARD_PACKAGE"
 test -n "$OPENAI_API_KEY"
 test -n "$OPENAI_MODEL"
-cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
+cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw onboard --non-interactive --accept-risk \
   --mode local \
   --auth-choice openai-api-key \
@@ -43,7 +43,7 @@ dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 unset OPENAI_API_KEY
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 90 "$(cat "$TMPDIR/run.pid")"
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 90 "$(cat "$TMPDIR/run.pid")"
 OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json > "$TMPDIR/live-response.json"
 ```
 
@@ -52,7 +52,7 @@ OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key de
 ```bash
 # should import the model and portable authentication without changing the source config
 cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
-node "$GITHUB_WORKSPACE/examples/support/profile.mjs" assert-model "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
+node "$GITHUB_WORKSPACE/scripts/leia-profile-cli.mjs" assert-model "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
 
 # should report the imported model without exposing credential material
 grep -F "agents       main" "$TMPDIR/init.log"
@@ -70,6 +70,6 @@ grep -F "DEVGUARD_MODEL_OK" "$TMPDIR/live-response.json"
 # should stop live supervision
 if kill -0 "$(cat "$TMPDIR/run.pid")" 2>/dev/null; then
   kill -TERM "$(cat "$TMPDIR/run.pid")"
-  node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
+  node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
 fi
 ```

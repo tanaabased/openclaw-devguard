@@ -7,7 +7,7 @@ This scenario keeps a supervised Gateway live while DevGuard aggregates its safe
 ```bash
 # should prepare and initialize the fixture plugin
 test -f "$DEVGUARD_PACKAGE"
-cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
+cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$TMPDIR/plugin"
@@ -15,7 +15,7 @@ openclaw devguard init "$TMPDIR/plugin"
 # should start a verified supervised gateway
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 60
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$TMPDIR/run.log" "ready        devguard-example" 1 60
 ```
 
 ## Testing
@@ -30,5 +30,5 @@ grep -F "pass         current plugin build" "$TMPDIR/doctor.log"
 
 # should stop supervision cleanly
 kill -TERM "$(cat "$TMPDIR/run.pid")"
-node "$GITHUB_WORKSPACE/examples/support/check.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
 ```

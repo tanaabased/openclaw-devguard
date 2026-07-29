@@ -3,6 +3,7 @@
 ## Scope
 
 - Keep implementation in its nearest owning scope: plugin registration in `index.ts`, one implementation file per OpenClaw subcommand in `cli/`, CLI registration and reusable orchestration in `lib/`, pure helpers in `utils/`, and development tasks in `scripts/`.
+- Keep shared Leia target projects in `fixtures/`, shared executable Leia drivers in `scripts/`, and only matrix-backed scenario directories plus required boundary files in `examples/`.
 - Keep tests flat in `test/` and name specs after the behavior they own.
 - Treat `SPEC.md` as product intent, not evidence that a feature has been implemented.
 

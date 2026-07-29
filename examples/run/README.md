@@ -8,7 +8,7 @@ This scenario initializes a linked fixture plugin under packed DevGuard and veri
 # should prepare the shared fixture plugin
 test -f "$DEVGUARD_PACKAGE"
 command -v openclaw >/dev/null
-cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
+cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 
 # should install and enable packed devguard
 openclaw plugins install "$DEVGUARD_PACKAGE" --force

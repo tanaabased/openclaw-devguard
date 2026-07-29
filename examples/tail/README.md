@@ -7,7 +7,7 @@ This scenario runs one supervised build and verifies bounded human and JSON even
 ```bash
 # should prepare and initialize the fixture plugin
 test -f "$DEVGUARD_PACKAGE"
-cp -R "$GITHUB_WORKSPACE/examples/fixtures/plugin" "$TMPDIR/plugin"
+cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$TMPDIR/plugin"
@@ -21,7 +21,7 @@ openclaw devguard init "$TMPDIR/plugin"
 ```bash
 # should emit valid bounded jsonl without decorating stdout
 (cd "$TMPDIR/plugin" && openclaw devguard tail --json --no-follow) > "$TMPDIR/events.jsonl"
-node "$GITHUB_WORKSPACE/examples/support/check.mjs" assert-jsonl "$TMPDIR/events.jsonl"
+node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" assert-jsonl "$TMPDIR/events.jsonl"
 grep -F '"event":"build_succeeded"' "$TMPDIR/events.jsonl"
 grep -F '"event":"target_plugin_loaded"' "$TMPDIR/events.jsonl"
 
