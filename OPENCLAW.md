@@ -131,15 +131,32 @@ Raw streams may contain prompts and secrets. Use that option only for deliberate
 
 ## Use The Isolated Gateway
 
-Ask DevGuard for the native profile name when inspecting the target or sending it a message from another terminal:
+Use `exec` for one native OpenClaw command against initialized isolated state:
+
+```sh
+openclaw devguard exec -- plugins inspect my-plugin --runtime --json
+openclaw devguard exec -- agent --session-key devguard-smoke --message "Call an available tool" --json
+```
+
+Use `shell` when several native commands belong in the same terminal session:
+
+```sh
+openclaw devguard shell
+openclaw plugins inspect my-plugin --runtime --json
+openclaw agent --session-key devguard-smoke --message "Call an available tool" --json
+exit
+```
+
+Both commands discover the nearest initialized DevGuard project. `shell` starts `$SHELL -l`, falls back to `/bin/sh`, changes to the target root, inherits the caller's environment and terminal streams, and replaces the OpenClaw profile, state, and config selectors with the isolated values. It does not start the Gateway; keep `run` active in another terminal before invoking Gateway-backed or model-backed commands.
+
+For scripts that need the profile name directly, `profile` writes only that name to standard output and accepts an optional target-plugin path:
 
 ```sh
 DEVGUARD_PROFILE="$(openclaw devguard profile)"
-openclaw --profile "$DEVGUARD_PROFILE" plugins inspect my-plugin --runtime --json
-openclaw --profile "$DEVGUARD_PROFILE" agent --session-key devguard-smoke --message "Call an available tool" --json
+openclaw --profile "$DEVGUARD_PROFILE" config file
 ```
 
-`profile` writes only the scriptable profile name to standard output and accepts an optional target-plugin path. The isolated profile imports only the model and agent surface described above; it does not copy general OpenClaw configuration. Ambient channels remain disabled by design.
+The isolated profile imports only the model and agent surface described above; it does not copy general OpenClaw configuration. Ambient channels remain disabled by design.
 
 ## Logging And Deny Policy
 
@@ -179,6 +196,8 @@ openclaw devguard tail --json --no-follow
 | ------------------------------------------------------ | ------------------------------------------------------------- |
 | `openclaw devguard init [plugin-path] [options]`       | Import a source profile, initialize, build, validate, inspect |
 | `openclaw devguard profile [plugin-path]`              | Print the initialized native profile name                     |
+| `openclaw devguard exec -- <openclaw-args...>`         | Run one native command against initialized isolated state     |
+| `openclaw devguard shell`                              | Open a login shell in initialized isolated state              |
 | `openclaw devguard run [--once] [--unsafe-raw-stream]` | Supervise and verify the target                               |
 | `openclaw devguard tail [--json] [--no-follow]`        | Follow or read current audit records                          |
 | `openclaw devguard doctor`                             | Aggregate configuration, live runtime, and OpenClaw checks    |

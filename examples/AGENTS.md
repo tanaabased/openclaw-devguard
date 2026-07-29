@@ -14,6 +14,7 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Keep real product registration, onboarding, and mutation commands when their supported behavior is part of the scenario contract; use fixtures to prepare inputs, not to bypass the public surface under test.
 - Use the fresh runner's default OpenClaw profile for source setup unless named-profile behavior is itself under test.
 - Use `openclaw devguard exec -- ...` for native OpenClaw commands against initialized isolated state; reserve `devguard profile` for scenarios that specifically test profile output, and do not set `OPENCLAW_STATE_DIR` directly.
+- Use `openclaw devguard shell` only when the login-shell environment is the scenario contract; keep scripted native OpenClaw assertions on `devguard exec` so their commands remain visible.
 - Prefer direct `command | grep` assertions when one required command invocation has one output assertion; command cost alone is not a reason to persist its output.
 - Capture command output only when the same invocation must support multiple assertions, a full-output or non-leak check, detaching or later inspecting a background process, or an output artifact that is itself the contract.
 - Inspect DevGuard's existing logs directly when they are the observable lifecycle or safety record; do not duplicate command output into a temporary log merely to grep it.

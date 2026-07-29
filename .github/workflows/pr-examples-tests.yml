@@ -24,6 +24,7 @@ jobs:
           - install
           - init
           - exec
+          - shell
           - run
           - tail
           - doctor

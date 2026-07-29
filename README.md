@@ -76,6 +76,15 @@ Use debug logging while checking the watch loop:
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 ```
 
+Run one native OpenClaw command against initialized isolated state or enter a login shell where native commands select that state automatically:
+
+```sh
+openclaw devguard exec -- config get ui.assistant.name --json
+openclaw devguard shell
+```
+
+`shell` does not start the Gateway. Keep `run` active in another terminal before using Gateway-backed or model-backed OpenClaw commands.
+
 Inspect recorded events without following the log, check a live supervised environment, and restore its pre-DevGuard configuration:
 
 ```sh

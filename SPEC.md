@@ -151,6 +151,30 @@ openclaw --profile "$(openclaw devguard profile)" agents list
 
 The command must emit only the profile name to standard output, accept an optional plugin path, and fail when the target has not been initialized or its marker does not match the resolved native profile.
 
+### `openclaw devguard exec`
+
+Runs one native OpenClaw command against initialized isolated state.
+
+Example:
+
+```bash
+openclaw devguard exec -- agents list
+```
+
+The command must discover the nearest DevGuard project, validate its initialization marker, run from the target root with inherited terminal streams and environment credentials, replace the OpenClaw profile, state, and config selectors with the isolated values, forward every argument after `--`, and preserve the native command's exit status. It does not start the Gateway.
+
+### `openclaw devguard shell`
+
+Opens a login shell against initialized isolated state.
+
+Example:
+
+```bash
+openclaw devguard shell
+```
+
+The command must discover the nearest DevGuard project, validate its initialization marker, start the non-empty `$SHELL` with `-l` or fall back to `/bin/sh`, use the target root as its working directory, inherit the caller's environment and terminal streams, replace the OpenClaw profile, state, and config selectors with the isolated values, and preserve the shell's exit status. It does not start the Gateway, rewrite the prompt, or create a new isolation boundary.
+
 ### `openclaw devguard run`
 
 Runs the development environment.
@@ -663,6 +687,7 @@ The current baseline establishes the product's core workflow:
 - human and JSON `tail` output
 - aggregate `doctor` checks
 - OpenClaw lifecycle diagnostics
+- one-shot native OpenClaw execution and login-shell access to initialized isolated state
 - CI-first Leia operational examples
 
 This section records the intended baseline, not proof that a checkout currently satisfies it. Validation and the changelog remain the implementation evidence.
@@ -865,6 +890,7 @@ These items are intentionally not candidates on the path to `1.0.0`:
 20. CI-first operational scenarios cover the default deny path and every real-execution mode without relying on the developer's normal OpenClaw profile.
 21. DevGuard keeps OpenClaw Docker sandboxing off, and documentation identifies Docker-sandbox-dependent workflows as unsupported.
 22. Documentation clearly explains real side effects in `approve` and `allow`, direct target-plugin host access, and every excluded product boundary.
+23. One-shot native commands and login shells discover the nearest initialized project, select its exact isolated OpenClaw state without mutating the source environment, and preserve child exit status.
 
 ## Product Positioning
 
