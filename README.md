@@ -1,7 +1,7 @@
 # OpenClaw DevGuard
 
 <p align="center">
-  <img src="./assets/openclaw.png" alt="OpenClaw mascot" width="180" />
+  <img src="./assets/devguard-small.png" alt="DevGuard mascot" width="180" />
 </p>
 
 <p align="center">
