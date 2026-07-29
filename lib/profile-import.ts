@@ -27,7 +27,10 @@ import {
   selectAuthProfiles,
   type AuthImportSelection,
 } from '../utils/profile-import.ts';
-import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
+import isolatedOpenClawEnvironment, {
+  openClawProfileArguments,
+  type IsolatedOpenClawProfile,
+} from '../utils/isolated-openclaw-environment.ts';
 
 type AgentEntry = NonNullable<NonNullable<OpenClawConfig['agents']>['list']>[number];
 type AgentIdentity = NonNullable<AgentEntry['identity']>;
@@ -413,12 +416,12 @@ export function resolveProfileImport(
 
 export async function applyProfileIdentityImport(
   resolved: ResolvedProfileImport,
-  destinationStateDirectory: string,
+  profile: IsolatedOpenClawProfile,
   environment: NodeJS.ProcessEnv,
   dependencies: ProfileImportDependencies = {},
 ): Promise<void> {
   const runCommand = dependencies.runCommand ?? processCommand;
-  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, destinationStateDirectory);
+  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, profile);
   for (const { agentId, workspace } of resolved.workspaceIdentityImports) {
     try {
       await access(join(workspace, 'IDENTITY.md'));
@@ -428,7 +431,7 @@ export async function applyProfileIdentityImport(
     }
     await runCommand(
       'openclaw',
-      [
+      openClawProfileArguments(profile.profileName, [
         'agents',
         'set-identity',
         '--agent',
@@ -437,7 +440,7 @@ export async function applyProfileIdentityImport(
         workspace,
         '--from-identity',
         '--json',
-      ],
+      ]),
       { env: isolatedEnvironment },
     );
   }

@@ -23,7 +23,8 @@ describe('cli/doctor', () => {
   it('should aggregate DevGuard and OpenClaw checks into one passing report', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-doctor-'));
     const devguardHome = join(root, 'home');
-    const paths = resolveProjectPaths(root, config.plugin.id, { DEVGUARD_HOME: devguardHome });
+    const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
+    const paths = resolveProjectPaths(root, config.plugin.id, environment);
     const writes: string[] = [];
     const commands: string[][] = [];
     const logger: Logger = { info() {}, warn() {}, error() {} };
@@ -51,7 +52,13 @@ describe('cli/doctor', () => {
         writeFile(join(root, 'openclaw.plugin.json'), JSON.stringify({ id: 'example-plugin' })),
         writeFile(
           join(paths.projectStateRoot, 'init.json'),
-          JSON.stringify({ profileImport: { agentIds: ['main'] } }),
+          JSON.stringify({
+            version: 2,
+            profileName: paths.profileName,
+            configPath: join(paths.stateDirectory, 'openclaw.json'),
+            snapshotPath: null,
+            profileImport: { agentIds: ['main'] },
+          }),
         ),
         writeFile(join(paths.projectStateRoot, 'gateway-token'), 'gateway-secret\n'),
         writeFile(join(paths.stateDirectory, 'openclaw.json'), JSON.stringify(stateConfig)),
@@ -62,7 +69,7 @@ describe('cli/doctor', () => {
       ]);
 
       await doctorDevguard(root, {
-        environment: { DEVGUARD_HOME: devguardHome },
+        environment,
         logger,
         output: { writeStdout: (value) => writes.push(value) },
         queryStatus: async ({ token, url }) => {
@@ -75,26 +82,33 @@ describe('cli/doctor', () => {
             pluginBuildId: 'build-1',
             pluginId: 'example-plugin',
             policyMode: 'deny',
+            profileName: paths.profileName,
             stateDirectory: paths.stateDirectory,
           };
         },
         runCommand: async (command, args, options) => {
           assert.equal(command, 'openclaw');
+          assert.equal(
+            options?.env?.OPENCLAW_CONFIG_PATH,
+            join(paths.stateDirectory, 'openclaw.json'),
+          );
+          assert.equal(options?.env?.OPENCLAW_PROFILE, paths.profileName);
           assert.equal(options?.env?.OPENCLAW_STATE_DIR, paths.stateDirectory);
           commands.push([...args]);
-          if (args[0] === 'config' && args[2] === 'gateway') {
+          const profileArgs = args.slice(2);
+          if (profileArgs[0] === 'config' && profileArgs[2] === 'gateway') {
             return { code: 0, output: JSON.stringify(stateConfig.gateway) };
           }
-          if (args[0] === 'config' && args[2] === 'tools') {
+          if (profileArgs[0] === 'config' && profileArgs[2] === 'tools') {
             return { code: 0, output: JSON.stringify(stateConfig.tools) };
           }
-          if (args[0] === 'config' && args[2] === 'agents.defaults.sandbox') {
+          if (profileArgs[0] === 'config' && profileArgs[2] === 'agents.defaults.sandbox') {
             return {
               code: 0,
               output: JSON.stringify(stateConfig.agents.defaults.sandbox),
             };
           }
-          if (args[0] === 'config' && args[2] === 'agents.list') {
+          if (profileArgs[0] === 'config' && profileArgs[2] === 'agents.list') {
             return { code: 0, output: JSON.stringify(stateConfig.agents.list) };
           }
           return { code: 0, output: '{}' };
@@ -103,15 +117,23 @@ describe('cli/doctor', () => {
       });
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 19);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 20);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
       assert.deepEqual(commands, [
-        ['config', 'get', 'gateway', '--json'],
-        ['config', 'get', 'tools', '--json'],
-        ['config', 'get', 'agents.defaults.sandbox', '--json'],
-        ['config', 'get', 'agents.list', '--json'],
-        ['plugins', 'inspect', 'example-plugin', '--runtime', '--json'],
-        ['plugins', 'doctor'],
+        ['--profile', paths.profileName, 'config', 'get', 'gateway', '--json'],
+        ['--profile', paths.profileName, 'config', 'get', 'tools', '--json'],
+        ['--profile', paths.profileName, 'config', 'get', 'agents.defaults.sandbox', '--json'],
+        ['--profile', paths.profileName, 'config', 'get', 'agents.list', '--json'],
+        [
+          '--profile',
+          paths.profileName,
+          'plugins',
+          'inspect',
+          'example-plugin',
+          '--runtime',
+          '--json',
+        ],
+        ['--profile', paths.profileName, 'plugins', 'doctor'],
       ]);
       assert.match(await readFile(paths.logPath, 'utf8'), /doctor_check_succeeded/);
     } finally {

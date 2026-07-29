@@ -65,10 +65,22 @@ describe('lib/project-config', () => {
   it('should derive stable isolated state outside the normal OpenClaw profile', () => {
     const paths = resolveProjectPaths('/workspace/example', 'example-plugin', {
       DEVGUARD_HOME: '/isolated/devguard',
+      HOME: '/home/tester',
     });
 
-    assert.match(paths.stateDirectory, /^\/isolated\/devguard\/projects\/example-plugin-/);
-    assert.match(paths.stateDirectory, /\/state$/);
+    assert.match(paths.profileName, /^devguard-example-plugin-[a-f0-9]{12}$/);
+    assert.ok(paths.profileName.length <= 64);
+    assert.equal(paths.stateDirectory, `/home/tester/.openclaw-${paths.profileName}`);
+    assert.match(paths.projectStateRoot, /^\/isolated\/devguard\/projects\/example-plugin-/);
     assert.match(paths.logPath, /\/logs\/events\.jsonl$/);
+  });
+
+  it('should sanitize and bound native profile names', () => {
+    const paths = resolveProjectPaths('/workspace/example', `@scope/${'Plugin.Name'.repeat(10)}`, {
+      HOME: '/home/tester',
+    });
+
+    assert.match(paths.profileName, /^[a-z0-9][a-z0-9_-]{0,63}$/);
+    assert.equal(paths.profileName.length, 64);
   });
 });

@@ -5,6 +5,7 @@ export interface GatewayStatus {
   pluginBuildId?: string;
   hookRegistered?: boolean;
   policyMode?: string;
+  profileName?: string;
   logPath?: string;
   gatewayProcessId?: number;
   stateDirectory?: string;
@@ -34,6 +35,8 @@ export class GatewayStatusTimeoutError extends Error {
 export interface WaitForGatewayStatusOptions {
   delay?: (milliseconds: number) => Promise<void>;
   expectedBuildId: string;
+  expectedProfileName?: string;
+  expectedStateDirectory?: string;
   isCurrent: () => boolean;
   now?: () => number;
   pollIntervalMs?: number;
@@ -48,7 +51,7 @@ function parseGatewayStatus(value: unknown): GatewayStatus {
   return value as GatewayStatus;
 }
 
-function validateReadyStatus(status: GatewayStatus): void {
+function validateReadyStatus(status: GatewayStatus, options: WaitForGatewayStatusOptions): void {
   if (status.hookRegistered !== true) {
     throw new Error('Gateway did not register the DevGuard hook');
   }
@@ -57,6 +60,18 @@ function validateReadyStatus(status: GatewayStatus): void {
   }
   if (status.denyUnknownTools !== true) {
     throw new Error('Gateway is not denying unknown tools');
+  }
+  if (
+    options.expectedProfileName !== undefined &&
+    status.profileName !== options.expectedProfileName
+  ) {
+    throw new Error('Gateway is not using the expected OpenClaw profile');
+  }
+  if (
+    options.expectedStateDirectory !== undefined &&
+    status.stateDirectory !== options.expectedStateDirectory
+  ) {
+    throw new Error('Gateway is not using the expected OpenClaw state directory');
   }
 }
 
@@ -91,7 +106,7 @@ export default async function waitForGatewayStatus(
     const status = parseGatewayStatus(result);
     lastObservedBuildId = status.pluginBuildId;
     if (status.pluginBuildId === options.expectedBuildId) {
-      validateReadyStatus(status);
+      validateReadyStatus(status, options);
       return status;
     }
 

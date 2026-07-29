@@ -22,7 +22,10 @@ import processCommand, {
 import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 import doctorChecks, { latestSuccessfulBuildId } from '../utils/doctor-checks.ts';
-import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
+import isolatedOpenClawEnvironment, {
+  openClawProfileArguments,
+} from '../utils/isolated-openclaw-environment.ts';
+import parseRestoreMarker from '../utils/restore-marker.ts';
 
 interface Attempt<T> {
   error?: string;
@@ -75,12 +78,18 @@ function commandJson(result: Attempt<ProcessCommandResult>): Attempt<unknown> {
   }
 }
 
-function importedAgentIds(marker: Attempt<string>): Attempt<string[]> {
+function importedAgentIds(
+  marker: Attempt<string>,
+  projectStateRoot: string,
+  stateDirectory: string,
+  profileName: string,
+): Attempt<string[]> {
   if (!marker.value) return { error: marker.error ?? 'initialization marker is missing' };
   try {
     const value = JSON.parse(marker.value) as {
       profileImport?: { agentIds?: unknown };
     };
+    parseRestoreMarker(value, projectStateRoot, stateDirectory, profileName);
     const agentIds = value.profileImport?.agentIds;
     if (!Array.isArray(agentIds) || agentIds.some((agentId) => typeof agentId !== 'string')) {
       return { error: 'initialization marker does not contain imported agents' };
@@ -99,9 +108,11 @@ export default async function doctorDevguard(
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);
-  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, paths.stateDirectory, {
-    OPENCLAW_SKIP_CHANNELS: '1',
-  });
+  const isolatedEnvironment = isolatedOpenClawEnvironment(
+    environment,
+    { profileName: paths.profileName, stateDirectory: paths.stateDirectory },
+    { OPENCLAW_SKIP_CHANNELS: '1' },
+  );
   const runCommand = options.runCommand ?? processCommand;
   const output = options.output ?? defaultCliOutput;
   const events = createRuntimeEventRecorder({
@@ -124,39 +135,70 @@ export default async function doctorDevguard(
   ] = await Promise.all([
     attempt(() => readFile(join(paths.projectStateRoot, 'init.json'), 'utf8')),
     attempt(() =>
-      runCommand('openclaw', ['config', 'get', 'gateway', '--json'], {
-        allowFailure: true,
-        env: isolatedEnvironment,
-      }),
+      runCommand(
+        'openclaw',
+        openClawProfileArguments(paths.profileName, ['config', 'get', 'gateway', '--json']),
+        {
+          allowFailure: true,
+          env: isolatedEnvironment,
+        },
+      ),
     ),
     attempt(() =>
-      runCommand('openclaw', ['config', 'get', 'tools', '--json'], {
-        allowFailure: true,
-        env: isolatedEnvironment,
-      }),
+      runCommand(
+        'openclaw',
+        openClawProfileArguments(paths.profileName, ['config', 'get', 'tools', '--json']),
+        {
+          allowFailure: true,
+          env: isolatedEnvironment,
+        },
+      ),
     ),
     attempt(() =>
-      runCommand('openclaw', ['config', 'get', 'agents.defaults.sandbox', '--json'], {
-        allowFailure: true,
-        env: isolatedEnvironment,
-      }),
+      runCommand(
+        'openclaw',
+        openClawProfileArguments(paths.profileName, [
+          'config',
+          'get',
+          'agents.defaults.sandbox',
+          '--json',
+        ]),
+        {
+          allowFailure: true,
+          env: isolatedEnvironment,
+        },
+      ),
     ),
     attempt(() =>
-      runCommand('openclaw', ['config', 'get', 'agents.list', '--json'], {
-        allowFailure: true,
-        env: isolatedEnvironment,
-      }),
+      runCommand(
+        'openclaw',
+        openClawProfileArguments(paths.profileName, ['config', 'get', 'agents.list', '--json']),
+        {
+          allowFailure: true,
+          env: isolatedEnvironment,
+        },
+      ),
     ),
     attempt(async () => JSON.parse(await readFile(join(root, 'openclaw.plugin.json'), 'utf8'))),
     attempt(() => readFile(paths.logPath, 'utf8')),
     attempt(() =>
-      runCommand('openclaw', ['plugins', 'inspect', config.plugin.id, '--runtime', '--json'], {
-        allowFailure: true,
-        env: isolatedEnvironment,
-      }),
+      runCommand(
+        'openclaw',
+        openClawProfileArguments(paths.profileName, [
+          'plugins',
+          'inspect',
+          config.plugin.id,
+          '--runtime',
+          '--json',
+        ]),
+        {
+          allowFailure: true,
+          env: isolatedEnvironment,
+        },
+      ),
     ),
     attempt(() =>
-      runCommand('openclaw', ['plugins', 'doctor'], {
+      runCommand('openclaw', openClawProfileArguments(paths.profileName, ['plugins', 'doctor']), {
         allowFailure: true,
         env: isolatedEnvironment,
       }),
@@ -170,7 +212,12 @@ export default async function doctorDevguard(
   const toolsConfig = commandJson(toolsConfigResult);
   const sandboxConfig = commandJson(sandboxConfigResult);
   const agentsConfig = commandJson(agentsConfigResult);
-  const profileImport = importedAgentIds(marker);
+  const profileImport = importedAgentIds(
+    marker,
+    paths.projectStateRoot,
+    paths.stateDirectory,
+    paths.profileName,
+  );
   const stateConfig =
     gatewayConfig.value !== undefined &&
     toolsConfig.value !== undefined &&
@@ -209,6 +256,7 @@ export default async function doctorDevguard(
   const checks = doctorChecks({
     expectedPluginId: config.plugin.id,
     expectedPort: config.gateway.port,
+    expectedProfileName: paths.profileName,
     expectedStateDirectory: paths.stateDirectory,
     gatewayError: gatewayStatus.error,
     gatewayStatus: gatewayStatus.value as GatewayStatus | undefined,

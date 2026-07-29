@@ -26,7 +26,10 @@ import {
   type ProfileImportDependencies,
   type ResolvedProfileImport,
 } from '../lib/profile-import.ts';
-import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
+import isolatedOpenClawEnvironment, {
+  openClawProfileArguments,
+} from '../utils/isolated-openclaw-environment.ts';
+import parseRestoreMarker from '../utils/restore-marker.ts';
 
 const DEVGUARD_ASSISTANT_NAME = 'DEVGUARD';
 const DEVGUARD_AVATAR_DATA_URI_PREFIX = 'data:image/png;base64,';
@@ -47,6 +50,7 @@ export interface InitDevguardResult {
   config: DevguardProjectConfig;
   configCreated: boolean;
   pluginRoot: string;
+  profileName: string;
   stateDirectory: string;
   logPath: string;
   profileImport: ResolvedProfileImport;
@@ -58,8 +62,10 @@ interface InitializationProfileImportMarker {
 }
 
 interface InitializationMarker {
+  profileName?: unknown;
   profileImport?: InitializationProfileImportMarker;
   snapshotPath?: string | null;
+  version?: unknown;
   [key: string]: unknown;
 }
 
@@ -176,14 +182,19 @@ export function createIsolatedStatePatch(
 }
 
 async function configureIsolatedState(
+  projectStateRoot: string,
+  profileName: string,
   stateDirectory: string,
   port: number,
   environment: NodeJS.ProcessEnv,
   profilePatch: Record<string, unknown>,
   assistantAvatar: Buffer,
 ): Promise<void> {
-  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, stateDirectory);
-  const tokenPath = join(dirname(stateDirectory), 'gateway-token');
+  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, {
+    profileName,
+    stateDirectory,
+  });
+  const tokenPath = join(projectStateRoot, 'gateway-token');
   let gatewayToken: string;
   try {
     gatewayToken = (await readFile(tokenPath, 'utf8')).trim();
@@ -199,19 +210,25 @@ async function configureIsolatedState(
     });
   }
   const patch = createIsolatedStatePatch(port, gatewayToken, profilePatch, assistantAvatar);
-  await processCommand('openclaw', ['config', 'patch', '--stdin'], {
-    env: isolatedEnvironment,
-    input: JSON.stringify(patch),
-  });
+  await processCommand(
+    'openclaw',
+    openClawProfileArguments(profileName, ['config', 'patch', '--stdin']),
+    {
+      env: isolatedEnvironment,
+      input: JSON.stringify(patch),
+    },
+  );
 }
 
 export async function snapshotConfiguration(
   projectStateRoot: string,
   stateDirectory: string,
+  profileName: string,
 ): Promise<string | undefined> {
   const markerPath = join(projectStateRoot, 'init.json');
   const marker = await readInitializationMarker(projectStateRoot);
   if (marker) {
+    parseRestoreMarker(marker, projectStateRoot, stateDirectory, profileName);
     return typeof marker.snapshotPath === 'string' ? marker.snapshotPath : undefined;
   }
 
@@ -228,7 +245,11 @@ export async function snapshotConfiguration(
   }
   await writeFile(
     markerPath,
-    `${JSON.stringify({ version: 1, configPath, snapshotPath: snapshot ?? null }, null, 2)}\n`,
+    `${JSON.stringify(
+      { version: 2, profileName, configPath, snapshotPath: snapshot ?? null },
+      null,
+      2,
+    )}\n`,
     'utf8',
   );
   return snapshot;
@@ -236,6 +257,7 @@ export async function snapshotConfiguration(
 
 async function writeProfileImportMarker(
   projectStateRoot: string,
+  profileName: string,
   profileImport: ResolvedProfileImport,
   copyModelProfile: boolean,
 ): Promise<void> {
@@ -243,6 +265,8 @@ async function writeProfileImportMarker(
   const marker = (await readInitializationMarker(projectStateRoot)) ?? {};
   const next = {
     ...marker,
+    version: 2,
+    profileName,
     profileImport: {
       version: 1,
       agentIds: profileImport.agentIds,
@@ -259,21 +283,30 @@ async function writeProfileImportMarker(
 async function ensureLinkedPlugin(
   pluginId: string,
   pluginRoot: string,
+  profileName: string,
   environment: NodeJS.ProcessEnv,
 ): Promise<void> {
-  const inspection = await processCommand('openclaw', ['plugins', 'inspect', pluginId, '--json'], {
-    env: environment,
-    allowFailure: true,
-  });
+  const inspection = await processCommand(
+    'openclaw',
+    openClawProfileArguments(profileName, ['plugins', 'inspect', pluginId, '--json']),
+    {
+      env: environment,
+      allowFailure: true,
+    },
+  );
   if (inspection.code === 0 && inspection.output.includes(pluginRoot)) return;
   if (inspection.code === 0) {
-    await processCommand('openclaw', ['plugins', 'uninstall', pluginId, '--force'], {
-      env: environment,
-    });
+    await processCommand(
+      'openclaw',
+      openClawProfileArguments(profileName, ['plugins', 'uninstall', pluginId, '--force']),
+      { env: environment },
+    );
   }
-  await processCommand('openclaw', ['plugins', 'install', pluginRoot, '--link'], {
-    env: environment,
-  });
+  await processCommand(
+    'openclaw',
+    openClawProfileArguments(profileName, ['plugins', 'install', pluginRoot, '--link']),
+    { env: environment },
+  );
 }
 
 export default async function initDevguard(
@@ -292,6 +325,14 @@ export default async function initDevguard(
   const { config, created } = await ensureProjectConfig(pluginRoot);
   const paths = resolveProjectPaths(pluginRoot, config.plugin.id, environment);
   const existingMarker = await readInitializationMarker(paths.projectStateRoot);
+  if (existingMarker) {
+    parseRestoreMarker(
+      existingMarker,
+      paths.projectStateRoot,
+      paths.stateDirectory,
+      paths.profileName,
+    );
+  }
   await assertRestorableDestination(paths.stateDirectory, existingMarker);
   const copyModelProfile = options.copyModelProfile !== false;
   const preparedProfileImport = prepareProfileImport({
@@ -310,8 +351,14 @@ export default async function initDevguard(
     }
   }
   const profileImport = resolveProfileImport(preparedProfileImport, copyOAuth);
-  const snapshotPath = await snapshotConfiguration(paths.projectStateRoot, paths.stateDirectory);
+  const snapshotPath = await snapshotConfiguration(
+    paths.projectStateRoot,
+    paths.stateDirectory,
+    paths.profileName,
+  );
   await configureIsolatedState(
+    paths.projectStateRoot,
+    paths.profileName,
     paths.stateDirectory,
     config.gateway.port,
     environment,
@@ -320,12 +367,17 @@ export default async function initDevguard(
   );
   await applyProfileIdentityImport(
     profileImport,
-    paths.stateDirectory,
+    { profileName: paths.profileName, stateDirectory: paths.stateDirectory },
     environment,
     options.profileImportDependencies,
   );
   await applyProfileAuthImport(profileImport, options.profileImportDependencies);
-  await writeProfileImportMarker(paths.projectStateRoot, profileImport, copyModelProfile);
+  await writeProfileImportMarker(
+    paths.projectStateRoot,
+    paths.profileName,
+    profileImport,
+    copyModelProfile,
+  );
 
   logDebug(options.logger, `building plugin ${config.plugin.id}`);
   await processCommand(config.plugin.build.command, config.plugin.build.args, {
@@ -342,37 +394,56 @@ export default async function initDevguard(
     });
   }
 
-  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, paths.stateDirectory, {
-    OPENCLAW_SKIP_CHANNELS: '1',
-  });
+  const isolatedEnvironment = isolatedOpenClawEnvironment(
+    environment,
+    { profileName: paths.profileName, stateDirectory: paths.stateDirectory },
+    { OPENCLAW_SKIP_CHANNELS: '1' },
+  );
   if (config.plugin.id === 'openclaw-devguard') {
-    await ensureLinkedPlugin(config.plugin.id, pluginRoot, isolatedEnvironment);
+    await ensureLinkedPlugin(config.plugin.id, pluginRoot, paths.profileName, isolatedEnvironment);
   } else {
-    await processCommand('openclaw', ['plugins', 'install', devguardRoot, '--force'], {
-      env: isolatedEnvironment,
-    });
+    await processCommand(
+      'openclaw',
+      openClawProfileArguments(paths.profileName, ['plugins', 'install', devguardRoot, '--force']),
+      { env: isolatedEnvironment },
+    );
   }
-  await processCommand('openclaw', ['plugins', 'enable', 'openclaw-devguard'], {
-    env: isolatedEnvironment,
-  });
-  if (config.plugin.id !== 'openclaw-devguard') {
-    await ensureLinkedPlugin(config.plugin.id, pluginRoot, isolatedEnvironment);
-  }
-  await processCommand('openclaw', ['plugins', 'enable', config.plugin.id], {
-    env: isolatedEnvironment,
-  });
   await processCommand(
     'openclaw',
-    ['plugins', 'inspect', config.plugin.id, '--runtime', '--json'],
+    openClawProfileArguments(paths.profileName, ['plugins', 'enable', 'openclaw-devguard']),
     { env: isolatedEnvironment },
   );
-  await processCommand('openclaw', ['plugins', 'doctor'], { env: isolatedEnvironment });
+  if (config.plugin.id !== 'openclaw-devguard') {
+    await ensureLinkedPlugin(config.plugin.id, pluginRoot, paths.profileName, isolatedEnvironment);
+  }
+  await processCommand(
+    'openclaw',
+    openClawProfileArguments(paths.profileName, ['plugins', 'enable', config.plugin.id]),
+    { env: isolatedEnvironment },
+  );
+  await processCommand(
+    'openclaw',
+    openClawProfileArguments(paths.profileName, [
+      'plugins',
+      'inspect',
+      config.plugin.id,
+      '--runtime',
+      '--json',
+    ]),
+    { env: isolatedEnvironment },
+  );
+  await processCommand(
+    'openclaw',
+    openClawProfileArguments(paths.profileName, ['plugins', 'doctor']),
+    { env: isolatedEnvironment },
+  );
   logInfo(options.logger, `initialized plugin ${config.plugin.id}`);
 
   const result = {
     config,
     configCreated: created,
     pluginRoot,
+    profileName: paths.profileName,
     stateDirectory: paths.stateDirectory,
     logPath: paths.logPath,
     profileImport,
@@ -382,6 +453,7 @@ export default async function initDevguard(
   writeCliLines(output, [
     formatCliAction('initialized', result.config.plugin.id),
     formatCliTarget('project', result.pluginRoot),
+    formatCliTarget('profile', result.profileName),
     formatCliTarget('state', result.stateDirectory),
     formatCliTarget('log', result.logPath),
     formatCliField('agents', result.profileImport.agentIds.join(', ')),

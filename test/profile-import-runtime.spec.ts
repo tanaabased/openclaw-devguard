@@ -205,17 +205,24 @@ describe('lib/profile-import', () => {
       const resolved = resolveProfileImport(prepared, false);
 
       assert.deepEqual(resolved.workspaceIdentityImports, [{ agentId: 'devbot', workspace }]);
-      await applyProfileIdentityImport(resolved, destinationStateDirectory, environment, {
-        runCommand: async (command, args, options) => {
-          commands.push({ args, command, environment: options?.env });
-          return { code: 0, output: '{}' };
+      await applyProfileIdentityImport(
+        resolved,
+        { profileName: 'devguard-test', stateDirectory: destinationStateDirectory },
+        environment,
+        {
+          runCommand: async (command, args, options) => {
+            commands.push({ args, command, environment: options?.env });
+            return { code: 0, output: '{}' };
+          },
         },
-      });
+      );
 
       assert.deepEqual(commands, [
         {
           command: 'openclaw',
           args: [
+            '--profile',
+            'devguard-test',
             'agents',
             'set-identity',
             '--agent',
@@ -226,6 +233,8 @@ describe('lib/profile-import', () => {
             '--json',
           ],
           environment: {
+            OPENCLAW_CONFIG_PATH: join(destinationStateDirectory, 'openclaw.json'),
+            OPENCLAW_PROFILE: 'devguard-test',
             OPENCLAW_STATE_DIR: destinationStateDirectory,
           },
         },

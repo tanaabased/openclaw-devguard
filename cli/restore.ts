@@ -24,6 +24,7 @@ export interface RestoreDevguardOptions {
 export interface RestoreDevguardResult {
   changed: boolean;
   logPath: string;
+  profileName: string;
   restoredSnapshot: boolean;
   stateDirectory: string;
 }
@@ -32,12 +33,14 @@ async function readMarker(
   markerPath: string,
   projectStateRoot: string,
   stateDirectory: string,
+  profileName: string,
 ): Promise<RestoreMarker | undefined> {
   try {
     return parseRestoreMarker(
       JSON.parse(await readFile(markerPath, 'utf8')),
       projectStateRoot,
       stateDirectory,
+      profileName,
     );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
@@ -69,10 +72,16 @@ export default async function restoreDevguard(
   const markerPath = join(paths.projectStateRoot, 'init.json');
   const snapshotPath = join(paths.projectStateRoot, 'openclaw.before-devguard.json');
   const tokenPath = join(paths.projectStateRoot, 'gateway-token');
-  const marker = await readMarker(markerPath, paths.projectStateRoot, paths.stateDirectory);
+  const marker = await readMarker(
+    markerPath,
+    paths.projectStateRoot,
+    paths.stateDirectory,
+    paths.profileName,
+  );
   const result: RestoreDevguardResult = {
     changed: marker !== undefined,
     logPath: paths.logPath,
+    profileName: paths.profileName,
     restoredSnapshot: marker?.snapshotPath !== undefined,
     stateDirectory: paths.stateDirectory,
   };
@@ -109,6 +118,7 @@ export default async function restoreDevguard(
   const output = options.output ?? defaultCliOutput;
   writeCliLines(output, [
     formatCliAction(marker ? 'restored' : 'unchanged', config.plugin.id),
+    formatCliTarget('profile', paths.profileName),
     formatCliTarget('state', paths.stateDirectory),
     formatCliField(
       'config',

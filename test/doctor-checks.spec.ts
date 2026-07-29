@@ -21,6 +21,7 @@ describe('utils/doctor-checks', () => {
     const checks = doctorChecks({
       expectedPluginId: 'example-plugin',
       expectedPort: 19_001,
+      expectedProfileName: 'devguard-example',
       expectedStateDirectory: '/devguard/state',
       gatewayStatus: {
         ambientChannelsDisabled: true,
@@ -29,6 +30,7 @@ describe('utils/doctor-checks', () => {
         pluginBuildId: 'build-1',
         pluginId: 'example-plugin',
         policyMode: 'deny',
+        profileName: 'devguard-example',
         stateDirectory: '/devguard/state',
       },
       importedAgentIds: ['main'],
@@ -41,7 +43,7 @@ describe('utils/doctor-checks', () => {
       stateConfig,
     });
 
-    assert.equal(checks.length, 19);
+    assert.equal(checks.length, 20);
     assert.deepEqual(
       checks.filter(({ ok }) => !ok),
       [],
@@ -52,6 +54,7 @@ describe('utils/doctor-checks', () => {
     const checks = doctorChecks({
       expectedPluginId: 'example-plugin',
       expectedPort: 19_001,
+      expectedProfileName: 'devguard-example',
       expectedStateDirectory: '/normal/state',
       gatewayError: 'connection refused',
       initialized: false,
@@ -67,6 +70,7 @@ describe('utils/doctor-checks', () => {
     assert.ok(failed.has('profile-import'));
     assert.ok(failed.has('agent-state-isolated'));
     assert.ok(failed.has('profile-isolated'));
+    assert.ok(failed.has('profile-selected'));
     assert.ok(failed.has('sandbox-disabled'));
     assert.ok(failed.has('exec-pipeline-open'));
     assert.ok(failed.has('gateway-reachable'));

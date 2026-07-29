@@ -133,4 +133,39 @@ describe('lib/gateway-status', () => {
       /unknown tools/,
     );
   });
+
+  it('should reject a matching build from another profile or state directory', async () => {
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        expectedProfileName: 'devguard-example',
+        expectedStateDirectory: '/home/tester/.openclaw-devguard-example',
+        isCurrent: () => true,
+        queryStatus: () =>
+          Promise.resolve({
+            ...statusResult('build-1'),
+            profileName: 'wrong-profile',
+            stateDirectory: '/home/tester/.openclaw-wrong-profile',
+          }),
+        timeoutMs: 1_000,
+      }),
+      /expected OpenClaw profile/,
+    );
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        expectedProfileName: 'devguard-example',
+        expectedStateDirectory: '/home/tester/.openclaw-devguard-example',
+        isCurrent: () => true,
+        queryStatus: () =>
+          Promise.resolve({
+            ...statusResult('build-1'),
+            profileName: 'devguard-example',
+            stateDirectory: '/home/tester/.openclaw-wrong-profile',
+          }),
+        timeoutMs: 1_000,
+      }),
+      /expected OpenClaw state directory/,
+    );
+  });
 });

@@ -46,6 +46,7 @@ export interface ToolGuardStatus {
   pluginBuildId: string;
   gatewayProcessId: number;
   policyMode: 'deny';
+  profileName?: string;
   denyUnknownTools: true;
   hookRegistered: true;
   hookPriority: number;
@@ -164,6 +165,7 @@ export default function createToolGuard(options: ToolGuardOptions): {
         pluginBuildId: options.buildId,
         gatewayProcessId: process.pid,
         policyMode: 'deny',
+        ...(environment.OPENCLAW_PROFILE ? { profileName: environment.OPENCLAW_PROFILE } : {}),
         denyUnknownTools: true,
         hookRegistered: true,
         hookPriority: TOOL_GUARD_PRIORITY,

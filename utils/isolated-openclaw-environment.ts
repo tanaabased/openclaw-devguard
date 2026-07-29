@@ -1,13 +1,24 @@
+import { join } from 'node:path';
+
+export interface IsolatedOpenClawProfile {
+  profileName: string;
+  stateDirectory: string;
+}
+
+export function openClawProfileArguments(profileName: string, args: readonly string[]): string[] {
+  return ['--profile', profileName, ...args];
+}
+
 export default function isolatedOpenClawEnvironment(
   environment: NodeJS.ProcessEnv,
-  stateDirectory: string,
+  profile: IsolatedOpenClawProfile,
   overrides: NodeJS.ProcessEnv = {},
 ): NodeJS.ProcessEnv {
-  const isolated: NodeJS.ProcessEnv = {
+  return {
     ...environment,
     ...overrides,
-    OPENCLAW_STATE_DIR: stateDirectory,
+    OPENCLAW_CONFIG_PATH: join(profile.stateDirectory, 'openclaw.json'),
+    OPENCLAW_PROFILE: profile.profileName,
+    OPENCLAW_STATE_DIR: profile.stateDirectory,
   };
-  delete isolated.OPENCLAW_CONFIG_PATH;
-  return isolated;
 }

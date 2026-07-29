@@ -3,6 +3,8 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
+import { resolveRequiredHomeDir } from 'openclaw/plugin-sdk/state-paths';
+
 export const DEVGUARD_PROJECT_FILE = 'devguard.json';
 
 export interface DevguardProjectConfig {
@@ -25,6 +27,13 @@ export interface DevguardProjectConfig {
   gateway: {
     port: number;
   };
+}
+
+export interface DevguardProjectPaths {
+  logPath: string;
+  profileName: string;
+  projectStateRoot: string;
+  stateDirectory: string;
 }
 
 interface PackageMetadata {
@@ -221,16 +230,29 @@ export function resolveProjectPaths(
   pluginRoot: string,
   pluginId: string,
   environment: NodeJS.ProcessEnv = process.env,
-): { projectStateRoot: string; stateDirectory: string; logPath: string } {
+): DevguardProjectPaths {
   const normalizedRoot = resolve(pluginRoot);
   const hash = createHash('sha256').update(normalizedRoot).digest('hex').slice(0, 12);
   const slug = `${basename(pluginId).replace(/[^a-zA-Z0-9._-]+/g, '-')}-${hash}`;
+  const profileSegment =
+    basename(pluginId)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'plugin';
+  const profilePrefix = 'devguard-';
+  const profileSuffix = `-${hash}`;
+  const profileName = `${profilePrefix}${profileSegment.slice(
+    0,
+    64 - profilePrefix.length - profileSuffix.length,
+  )}${profileSuffix}`;
   const devguardHome = environment.DEVGUARD_HOME ?? join(homedir(), '.openclaw-dev', 'devguard');
   const projectStateRoot = join(devguardHome, 'projects', slug);
+  const stateDirectory = join(resolveRequiredHomeDir(environment), `.openclaw-${profileName}`);
 
   return {
-    projectStateRoot,
-    stateDirectory: join(projectStateRoot, 'state'),
     logPath: join(projectStateRoot, 'logs', 'events.jsonl'),
+    profileName,
+    projectStateRoot,
+    stateDirectory,
   };
 }

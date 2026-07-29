@@ -33,7 +33,8 @@ describe('cli/restore', () => {
   it('should restore the original config, remove temporary state, and preserve logs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-restore-'));
     const devguardHome = join(root, 'home');
-    const paths = resolveProjectPaths(root, config.plugin.id, { DEVGUARD_HOME: devguardHome });
+    const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
+    const paths = resolveProjectPaths(root, config.plugin.id, environment);
     const configPath = join(paths.stateDirectory, 'openclaw.json');
     const markerPath = join(paths.projectStateRoot, 'init.json');
     const snapshotPath = join(paths.projectStateRoot, 'openclaw.before-devguard.json');
@@ -51,16 +52,24 @@ describe('cli/restore', () => {
         writeFile(snapshotPath, '{ original: true }\n'),
         writeFile(join(paths.projectStateRoot, 'gateway-token'), 'temporary-secret\n'),
         writeFile(paths.logPath, '{"event":"existing"}\n'),
-        writeFile(markerPath, JSON.stringify({ version: 1, configPath, snapshotPath })),
+        writeFile(
+          markerPath,
+          JSON.stringify({
+            version: 2,
+            profileName: paths.profileName,
+            configPath,
+            snapshotPath,
+          }),
+        ),
       ]);
 
       const first = await restoreDevguard(root, {
-        environment: { DEVGUARD_HOME: devguardHome },
+        environment,
         logger,
         output: { writeStdout: (value) => writes.push(value) },
       });
       const second = await restoreDevguard(root, {
-        environment: { DEVGUARD_HOME: devguardHome },
+        environment,
         logger,
         output: { writeStdout: (value) => writes.push(value) },
       });
@@ -86,25 +95,35 @@ describe('cli/restore', () => {
   it('should resume cleanup after a crash completed the config restoration', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-restore-crash-'));
     const devguardHome = join(root, 'home');
-    const paths = resolveProjectPaths(root, config.plugin.id, { DEVGUARD_HOME: devguardHome });
+    const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
+    const paths = resolveProjectPaths(root, config.plugin.id, environment);
     const configPath = join(paths.stateDirectory, 'openclaw.json');
     const markerPath = join(paths.projectStateRoot, 'init.json');
     const snapshotPath = join(paths.projectStateRoot, 'openclaw.before-devguard.json');
 
     try {
-      await mkdir(paths.stateDirectory, { recursive: true });
+      await Promise.all([
+        mkdir(paths.stateDirectory, { recursive: true }),
+        mkdir(paths.projectStateRoot, { recursive: true }),
+      ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(configPath, '{ original: true }\n'),
         writeFile(
           markerPath,
-          JSON.stringify({ version: 1, configPath, snapshotPath, phase: 'restored' }),
+          JSON.stringify({
+            version: 2,
+            profileName: paths.profileName,
+            configPath,
+            snapshotPath,
+            phase: 'restored',
+          }),
         ),
         writeFile(join(paths.projectStateRoot, 'gateway-token'), 'temporary-secret\n'),
       ]);
 
       await restoreDevguard(root, {
-        environment: { DEVGUARD_HOME: devguardHome },
+        environment,
         logger,
         output: { writeStdout() {} },
       });
@@ -120,20 +139,32 @@ describe('cli/restore', () => {
   it('should remove generated isolated state when no config existed before init', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-restore-generated-'));
     const devguardHome = join(root, 'home');
-    const paths = resolveProjectPaths(root, config.plugin.id, { DEVGUARD_HOME: devguardHome });
+    const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
+    const paths = resolveProjectPaths(root, config.plugin.id, environment);
     const configPath = join(paths.stateDirectory, 'openclaw.json');
     const markerPath = join(paths.projectStateRoot, 'init.json');
 
     try {
-      await mkdir(paths.stateDirectory, { recursive: true });
+      await Promise.all([
+        mkdir(paths.stateDirectory, { recursive: true }),
+        mkdir(paths.projectStateRoot, { recursive: true }),
+      ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(configPath, '{ devguard: true }\n'),
-        writeFile(markerPath, JSON.stringify({ version: 1, configPath, snapshotPath: null })),
+        writeFile(
+          markerPath,
+          JSON.stringify({
+            version: 2,
+            profileName: paths.profileName,
+            configPath,
+            snapshotPath: null,
+          }),
+        ),
       ]);
 
       const result = await restoreDevguard(root, {
-        environment: { DEVGUARD_HOME: devguardHome },
+        environment,
         logger,
         output: { writeStdout() {} },
       });

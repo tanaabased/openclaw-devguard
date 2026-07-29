@@ -12,12 +12,14 @@ export interface DoctorGatewayStatus {
   pluginBuildId?: string;
   pluginId?: string;
   policyMode?: string;
+  profileName?: string;
   stateDirectory?: string;
 }
 
 export interface DoctorCheckInput {
   expectedPluginId: string;
   expectedPort: number;
+  expectedProfileName: string;
   expectedStateDirectory: string;
   gatewayError?: string;
   gatewayStatus?: DoctorGatewayStatus;
@@ -95,6 +97,12 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
       importedAgentIds.join(', ') || undefined,
     ),
     check('profile-isolated', 'isolated profile', isolated, input.expectedStateDirectory),
+    check(
+      'profile-selected',
+      'native profile selected',
+      status?.profileName === input.expectedProfileName,
+      status?.profileName,
+    ),
     check('state-config', 'state configuration', stateConfig !== undefined, input.stateConfigError),
     check(
       'gateway-config',

@@ -9,12 +9,17 @@ describe('cli/init', () => {
   it('should create a restorable marker when isolated config does not exist yet', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-init-marker-'));
     const projectStateRoot = join(root, 'project');
-    const stateDirectory = join(projectStateRoot, 'state');
+    const stateDirectory = join(root, '.openclaw-devguard-example');
+    const profileName = 'devguard-example';
 
     try {
-      assert.equal(await snapshotConfiguration(projectStateRoot, stateDirectory), undefined);
+      assert.equal(
+        await snapshotConfiguration(projectStateRoot, stateDirectory, profileName),
+        undefined,
+      );
       assert.deepEqual(JSON.parse(await readFile(join(projectStateRoot, 'init.json'), 'utf8')), {
-        version: 1,
+        version: 2,
+        profileName,
         configPath: join(stateDirectory, 'openclaw.json'),
         snapshotPath: null,
       });

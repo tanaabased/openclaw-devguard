@@ -9,7 +9,11 @@ describe('lib/tool-guard', () => {
       pluginId: 'openclaw-devguard',
       buildId: 'build-123',
       logPath: '/tmp/devguard-test.jsonl',
-      environment: { NODE_ENV: 'development', API_TOKEN: 'secret' },
+      environment: {
+        NODE_ENV: 'development',
+        API_TOKEN: 'secret',
+        OPENCLAW_PROFILE: 'devguard-example',
+      },
       environmentValueAllowlist: ['NODE_ENV', 'API_TOKEN'],
       now: () => new Date('2026-07-28T12:00:00.000Z'),
       append: async (_path, records) => {
@@ -49,6 +53,7 @@ describe('lib/tool-guard', () => {
     assert.deepEqual(attempt.environment.gatewayProcess, [
       { name: 'API_TOKEN', present: true, length: 6, redacted: true },
       { name: 'NODE_ENV', present: true, length: 11, preview: 'de…nt' },
+      { name: 'OPENCLAW_PROFILE', present: true, length: 16 },
     ]);
     assert.deepEqual(attempt.environment.toolArguments, [
       { name: 'API_TOKEN', present: true, length: 6, redacted: true },
@@ -57,6 +62,7 @@ describe('lib/tool-guard', () => {
     assert.equal(attempt.environment.finalToolProcessEnvironmentComplete, false);
     assert.equal((writes[1]?.[0] as { event: string }).event, 'tool_call_blocked');
     assert.equal(guard.status().ambientChannelsDisabled, false);
+    assert.equal(guard.status().profileName, 'devguard-example');
   });
 
   it('should remain fail-closed when the append-only log cannot be written', async () => {
