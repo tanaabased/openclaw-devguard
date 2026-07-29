@@ -92,6 +92,7 @@ Most scenarios dogfood the repository through DevGuard's supported self-target p
 - live exec, write, and unknown-tool denial with audit redaction and correlation
 - source model and portable authentication import
 - selected agent workspace resolution with isolated agent and session state
+- native source and DevGuard profile selection without direct state-directory overrides
 
 Do not run direct OpenClaw commands, plugin installation, Gateway startup, or Leia scenarios as routine local validation. Keep these machine-mutating operational and end-to-end checks in the pull-request workflow matrix.
 

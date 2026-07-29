@@ -9,7 +9,7 @@ This scenario dogfoods DevGuard's self-target path while verifying that initiali
 test -f "$DEVGUARD_PACKAGE"
 test -n "$OPENAI_API_KEY"
 test -n "$OPENAI_MODEL"
-openclaw onboard --non-interactive --accept-risk \
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" onboard --non-interactive --accept-risk \
   --mode local \
   --auth-choice openai-api-key \
   --openai-api-key "$OPENAI_API_KEY" \
@@ -25,24 +25,25 @@ openclaw onboard --non-interactive --accept-risk \
   --skip-skills \
   --skip-ui \
   --suppress-gateway-token-output
-openclaw models set "openai/$OPENAI_MODEL"
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" models set "openai/$OPENAI_MODEL"
 
 # should install and enable packed devguard in the source profile
-openclaw plugins install "$DEVGUARD_PACKAGE" --force
-openclaw plugins enable openclaw-devguard
-cp "$OPENCLAW_STATE_DIR/openclaw.json" "$TMPDIR/source-before.json"
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config file | sed "s|^~|$HOME|" > "$TMPDIR/source-config-path"
+cp "$(cat "$TMPDIR/source-config-path")" "$TMPDIR/source-before.json"
 
 # should initialize devguard with the source model profile
 unset OPENAI_API_KEY
-openclaw devguard init "$GITHUB_WORKSPACE" > "$TMPDIR/init.log" 2>&1
-find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
-dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
-dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE" > "$TMPDIR/init.log" 2>&1
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
+find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
+dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start a live gateway with imported authentication
 unset OPENAI_API_KEY
-(cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$GITHUB_WORKSPACE" && exec openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 90 "$(cat "$TMPDIR/run.pid")"
 ```
@@ -51,7 +52,7 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 
 ```bash
 # should import the model and portable authentication without changing the source config
-cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
+cmp "$TMPDIR/source-before.json" "$(cat "$TMPDIR/source-config-path")"
 
 # should report the imported model without exposing credential material
 set -o pipefail
@@ -63,7 +64,7 @@ if grep -Fq "$OPENAI_API_KEY" "$TMPDIR/init.log"; then exit 1; fi
 # should return the live model response
 set -o pipefail
 unset OPENAI_API_KEY
-OPENCLAW_STATE_DIR="$(cat "$TMPDIR/state-path")" openclaw agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json | grep -F "DEVGUARD_MODEL_OK"
+openclaw --profile "$(cat "$TMPDIR/devguard-profile")" agent --session-key devguard-model-live --message "Reply exactly: DEVGUARD_MODEL_OK" --json | grep -F "DEVGUARD_MODEL_OK"
 ```
 
 ## Cleanup

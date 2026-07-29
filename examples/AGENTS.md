@@ -12,6 +12,7 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Hoist inputs to root `fixtures/` only when they are shared across multiple examples or explicitly established for concrete near-term shared use.
 - Reuse a repository-owned product asset directly when it is itself the test input; do not duplicate it as an example-only fixture.
 - Keep real product registration, onboarding, and mutation commands when their supported behavior is part of the scenario contract; use fixtures to prepare inputs, not to bypass the public surface under test.
+- Select source and isolated OpenClaw state through explicit native `--profile` arguments; do not set `OPENCLAW_STATE_DIR` directly in a scenario.
 - Prefer direct `command | grep` assertions when one required command invocation has one output assertion; command cost alone is not a reason to persist its output.
 - Capture command output only when the same invocation must support multiple assertions, a full-output or non-leak check, detaching or later inspecting a background process, or an output artifact that is itself the contract.
 - Inspect DevGuard's existing logs directly when they are the observable lifecycle or safety record; do not duplicate command output into a temporary log merely to grep it.

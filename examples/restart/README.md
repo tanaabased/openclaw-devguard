@@ -7,15 +7,15 @@ This scenario edits DevGuard while it supervises itself and verifies a controlle
 ```bash
 # should prepare and initialize devguard as its own target
 test -f "$DEVGUARD_PACKAGE"
-openclaw plugins install "$DEVGUARD_PACKAGE" --force
-openclaw plugins enable openclaw-devguard
-openclaw devguard init "$GITHUB_WORKSPACE"
-find "$DEVGUARD_HOME/projects" -path '*/state/openclaw.json' -print -quit > "$TMPDIR/config-path"
-dirname "$(dirname "$(cat "$TMPDIR/config-path")")" > "$TMPDIR/project-path"
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE"
+find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
+dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start the first verified plugin build
-(cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$GITHUB_WORKSPACE" && exec openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 60 "$(cat "$TMPDIR/run.pid")"
 ```

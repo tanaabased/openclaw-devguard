@@ -11,16 +11,20 @@ command -v openclaw >/dev/null
 test -f "$GITHUB_WORKSPACE/devguard.json"
 
 # should install and enable packed devguard
-openclaw plugins install "$DEVGUARD_PACKAGE" --force
-openclaw plugins enable openclaw-devguard
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
 
 # should initialize devguard as its own target and report reused config
 set -o pipefail
-openclaw devguard init "$GITHUB_WORKSPACE" 2>&1 | grep -F "config" | grep -F "reused"
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE" 2>&1 | grep -F "config" | grep -F "reused"
 
 # should reuse initialization on a second run
 set -o pipefail
-openclaw devguard init "$GITHUB_WORKSPACE" 2>&1 | grep -F "config" | grep -F "reused"
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE" 2>&1 | grep -F "config" | grep -F "reused"
+
+# should expose the initialized native profile as plain command output
+openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
+grep -F "devguard-openclaw-devguard-" "$TMPDIR/devguard-profile"
 ```
 
 ## Testing
