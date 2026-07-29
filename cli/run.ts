@@ -5,7 +5,10 @@ import { join } from 'node:path';
 
 import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
-import createDevRunner, { type GatewayExit } from '../lib/dev-runner.ts';
+import createDevRunner, {
+  DEVGUARD_MANAGED_RUNTIME_ENV,
+  type GatewayExit,
+} from '../lib/dev-runner.ts';
 import {
   defaultCliOutput,
   formatCliField,
@@ -103,6 +106,7 @@ export default async function runDevguard(
         OPENCLAW_SKIP_CHANNELS: '1',
         OPENCLAW_PLUGIN_LIFECYCLE_TRACE: '1',
         OPENCLAW_DIAGNOSTICS: 'plugin.load-profile',
+        [DEVGUARD_MANAGED_RUNTIME_ENV]: '1',
         DEVGUARD_BUILD_ID: buildId,
         DEVGUARD_LOG_PATH: paths.logPath,
         DEVGUARD_TARGET_PLUGIN_ID: config.plugin.id,

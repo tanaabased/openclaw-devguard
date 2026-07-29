@@ -31,8 +31,7 @@ export type PluginMetadataFailureCode =
   | 'startup-activation'
   | 'cli-command'
   | 'config-schema-type'
-  | 'config-schema-strictness'
-  | 'logging-config';
+  | 'config-schema-strictness';
 
 export interface PluginMetadataFailure {
   code: PluginMetadataFailureCode;
@@ -90,11 +89,5 @@ export default function pluginMetadataFailures(
     'config-schema-strictness',
     'config schema must be strict',
   );
-  check(
-    manifest.configSchema?.properties?.logging !== undefined,
-    'logging-config',
-    'logging config is missing',
-  );
-
   return failures;
 }

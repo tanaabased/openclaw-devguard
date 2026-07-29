@@ -1,5 +1,7 @@
 import type { ChildProcess } from 'node:child_process';
 
+export const DEVGUARD_MANAGED_RUNTIME_ENV = 'DEVGUARD_MANAGED_RUNTIME';
+
 export type StartBuild = () => ChildProcess;
 export type StartGateway = () => ChildProcess;
 export type StartValidation = () => ChildProcess;

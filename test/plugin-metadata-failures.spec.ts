@@ -24,7 +24,7 @@ const manifest: PluginManifest = {
   configSchema: {
     type: 'object',
     additionalProperties: false,
-    properties: { logging: { type: 'object' } },
+    properties: {},
   },
 };
 
@@ -45,12 +45,11 @@ describe('utils/plugin-metadata-failures', () => {
         'cli-command',
         'config-schema-type',
         'config-schema-strictness',
-        'logging-config',
       ]),
     );
   });
 
-  it('should report version and configuration drift independently', () => {
+  it('should report version and schema drift independently', () => {
     assert.deepEqual(
       new Set(
         pluginMetadataFailures(
@@ -59,12 +58,12 @@ describe('utils/plugin-metadata-failures', () => {
             ...manifest,
             configSchema: {
               ...manifest.configSchema,
-              properties: {},
+              additionalProperties: true,
             },
           },
         ).map(({ code }) => code),
       ),
-      new Set(['version-mismatch', 'logging-config']),
+      new Set(['version-mismatch', 'config-schema-strictness']),
     );
   });
 });
