@@ -29,6 +29,8 @@ jobs:
           - restore
           - restart
           - deny
+          - model
+          - agent
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
