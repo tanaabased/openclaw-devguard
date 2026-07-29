@@ -18,10 +18,9 @@ test -s "$TMPDIR/config-path"
 (cd "$TMPDIR/plugin" && openclaw devguard restore)
 test ! -e "$(cat "$TMPDIR/config-path")"
 
-# should initialize over an existing development profile config
+# should initialize over an existing development profile fixture
 mkdir -p "$(dirname "$(cat "$TMPDIR/config-path")")"
-printf '{}\n' > "$TMPDIR/prior-openclaw.json"
-cp "$TMPDIR/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
+cp "$GITHUB_WORKSPACE/examples/restore/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
 openclaw devguard init "$TMPDIR/plugin"
 ```
 
@@ -31,12 +30,12 @@ openclaw devguard init "$TMPDIR/plugin"
 # should restore the saved config and preserve the append-only log
 set -o pipefail
 (cd "$TMPDIR/plugin" && openclaw devguard restore) | grep -F "logs" | grep -F "preserved"
-cmp "$TMPDIR/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
+cmp "$GITHUB_WORKSPACE/examples/restore/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
 find "$DEVGUARD_HOME/projects" -path '*/logs/events.jsonl' -print -quit > "$TMPDIR/log-path"
 grep -F '"event":"configuration_restored"' "$(cat "$TMPDIR/log-path")"
 
 # should make repeated restore a successful no-op
 set -o pipefail
 (cd "$TMPDIR/plugin" && openclaw devguard restore) | grep -F "unchanged" | grep -F "devguard-example"
-cmp "$TMPDIR/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
+cmp "$GITHUB_WORKSPACE/examples/restore/prior-openclaw.json" "$(cat "$TMPDIR/config-path")"
 ```

@@ -14,13 +14,13 @@ cp -R "$GITHUB_WORKSPACE/fixtures/devguard-example-plugin" "$TMPDIR/plugin"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 
-# should initialize the fixture plugin
+# should initialize the fixture plugin and report created config
 set -o pipefail
-openclaw devguard init "$TMPDIR/plugin" 2>&1 | tee "$TMPDIR/init-first.log"
+openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "created"
 
 # should reuse initialization on a second run
 set -o pipefail
-openclaw devguard init "$TMPDIR/plugin" 2>&1 | tee "$TMPDIR/init-second.log"
+openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "reused"
 ```
 
 ## Testing
@@ -30,12 +30,7 @@ openclaw devguard init "$TMPDIR/plugin" 2>&1 | tee "$TMPDIR/init-second.log"
 set -o pipefail
 test -f "$TMPDIR/plugin/devguard.json"
 grep -F '"id"' "$TMPDIR/plugin/devguard.json" | grep -F '"devguard-example"'
-grep -F "config" "$TMPDIR/init-first.log" | grep -F "created"
 
 # should build the fixture plugin
 test -f "$TMPDIR/plugin/dist/index.js"
-
-# should report reused project configuration
-set -o pipefail
-grep -F "config" "$TMPDIR/init-second.log" | grep -F "reused"
 ```
