@@ -93,6 +93,15 @@ The plugin handles tool interception and logging.
 
 The CLI handles development-profile setup, plugin linking, builds, Gateway lifecycle, diagnostics, and configuration restoration.
 
+## Supported Platforms
+
+DevGuard must publish a truthful platform contract derived from exercised CI and runtime behavior.
+
+- macOS and Linux are the initial supported host platforms.
+- Windows is unsupported until process ownership, signal handling, filesystem permissions, path behavior, and operational scenarios are implemented and exercised there.
+- Unsupported hosts should fail before mutating project state and report the missing platform contract clearly.
+- Documentation and package metadata may not imply support broader than the tested platform matrix.
+
 ## Core Commands
 
 ### `openclaw devguard init`
@@ -136,6 +145,9 @@ openclaw devguard run
 
 Responsibilities:
 
+- acquire exclusive ownership of the project-specific supervision state
+- refuse to compete with a live DevGuard supervisor for the same project
+- preflight the configured Gateway port without terminating an unrelated process
 - run the target plugin's configured build command
 - start the isolated OpenClaw development Gateway
 - watch configured source and metadata paths
@@ -231,6 +243,16 @@ It must:
 - remove DevGuard-specific temporary state
 - avoid changing the user's normal OpenClaw profile
 - preserve logs unless explicitly asked to delete them
+
+## CLI Output and Exit Contract
+
+DevGuard commands must be reliable automation boundaries as well as readable interactive commands.
+
+- Exit `0` only after the requested operation succeeds or an active `run` session receives a normal operator shutdown signal.
+- Exit nonzero for invalid DevGuard configuration, failed initialization, build or validation failure, unsafe readiness, failed restoration, or unexpected Gateway termination.
+- Human command results belong on standard output and diagnostics or errors belong on standard error.
+- JSON modes must keep standard output machine-readable and route diagnostics to standard error.
+- Do not assign additional stable numeric meanings until distinct exit codes have a demonstrated caller.
 
 ## Tool Policy
 
@@ -340,6 +362,17 @@ Default project-specific location:
 ```text
 ~/.openclaw-dev/devguard/projects/<plugin-and-project-id>/logs/events.jsonl
 ```
+
+DevGuard-owned state must be private on every supported platform. On POSIX hosts, project state and
+log directories should be no broader than `0700`, and Gateway tokens, configuration snapshots,
+ownership markers, JSONL audit logs, and unsafe raw streams should be no broader than `0600`.
+`doctor` must report unsafe permissions, and DevGuard may repair permissions only on artifacts it
+owns.
+
+Active audit logs remain append-only and `restore` preserves them. DevGuard must warn when an audit
+log approaches or exceeds a documented size threshold. It must not silently delete or rotate logs;
+any future pruning or rotation must be explicit, preserve complete JSONL records, and retain
+predictable `tail` behavior.
 
 An attempted-call record carries parameters, effects, and environment summaries. A paired blocked-call record carries the terminal decision and reason:
 
@@ -642,22 +675,43 @@ Effort-to-impact is qualitative:
 
 ### Ranked feature and improvement backlog
 
-| Rank | Feature or improvement                          | Complexity | Impact | Effort-to-impact | Disposition | Primary dependency or constraint                          |
-| ---: | ----------------------------------------------- | ---------- | ------ | ---------------- | ----------- | --------------------------------------------------------- |
-|    1 | Strict policy plumbing and mode-aware readiness | M          | High   | Excellent        | Required    | Generated OpenClaw settings must agree with active mode   |
-|    2 | Runtime capability inventory and warnings       | M          | High   | Excellent        | Required    | Stable public runtime-inspection JSON                     |
-|    3 | Complete tool policy and outcome audit trail    | M          | High   | Excellent        | Required    | Correlated before, resolution, and after-tool events      |
-|    4 | Structured `doctor --json` output               | S          | Medium | Excellent        | Candidate   | Reuse the existing aggregate checks                       |
-|    5 | Stale-process and occupied-port diagnostics     | S          | Medium | Excellent        | Candidate   | Reliable process identity and bounded probes              |
-|    6 | Native OpenClaw `approve` mode                  | L          | High   | Good             | Required    | Strict modes, audit trail, and an OpenClaw approval route |
-|    7 | Process-tree cleanup and command timeouts       | M          | High   | Good             | Required    | Best-effort host-process supervision, not resource quotas |
-|    8 | OpenClaw compatibility contract diagnostics     | M          | High   | Good             | Required    | Public SDK, hook, and runtime-inspection contracts        |
-|    9 | Gateway environment passthrough policy          | M          | Medium | Good             | Candidate   | Separate Gateway and build environments                   |
-|   10 | Explicit run-scoped `allow` mode                | L          | High   | Fair             | Required    | Mode-aware profile policy and conspicuous risk UX         |
-|   11 | `tail` filters and bounded event queries        | M          | Medium | Fair             | Candidate   | Preserve raw JSONL output semantics                       |
-|   12 | Capability changes between successful builds    | M          | Medium | Fair             | Candidate   | Normalized runtime capability snapshots                   |
+| Rank | Feature or improvement                           | Complexity | Impact | Effort-to-impact | Disposition | Primary dependency or constraint                          |
+| ---: | ------------------------------------------------ | ---------- | ------ | ---------------- | ----------- | --------------------------------------------------------- |
+|    1 | Private state and audit artifact permissions     | S          | High   | Excellent        | Required    | Supported-platform permission primitives                  |
+|    2 | Single-supervisor ownership and port diagnostics | M          | High   | Excellent        | Required    | Reliable process identity and bounded probes              |
+|    3 | Strict policy plumbing and mode-aware readiness  | M          | High   | Excellent        | Required    | Generated OpenClaw settings must agree with active mode   |
+|    4 | Complete tool policy and outcome audit trail     | M          | High   | Excellent        | Required    | Correlated before, resolution, and after-tool events      |
+|    5 | Runtime capability inventory and warnings        | M          | High   | Excellent        | Required    | Stable public runtime-inspection JSON                     |
+|    6 | Process-tree cleanup and command timeouts        | M          | High   | Good             | Required    | Best-effort host-process supervision, not resource quotas |
+|    7 | Stable CLI output and exit contract              | S          | Medium | Excellent        | Required    | Focused command-boundary tests                            |
+|    8 | Supported host platform contract                 | S          | Medium | Excellent        | Required    | CI and operational evidence per advertised host           |
+|    9 | Structured `doctor --json` output                | S          | Medium | Excellent        | Candidate   | Reuse the existing aggregate checks                       |
+|   10 | Audit retention and size warnings                | S          | Medium | Excellent        | Required    | Preserve append-only and tail semantics                   |
+|   11 | Native OpenClaw `approve` mode                   | L          | High   | Good             | Required    | Strict modes, audit trail, and an OpenClaw approval route |
+|   12 | OpenClaw compatibility contract diagnostics      | M          | High   | Good             | Required    | Public SDK, hook, and runtime-inspection contracts        |
+|   13 | Gateway environment passthrough policy           | M          | Medium | Good             | Candidate   | Separate Gateway and build environments                   |
+|   14 | Explicit run-scoped `allow` mode                 | L          | High   | Fair             | Required    | Mode-aware profile policy and conspicuous risk UX         |
+|   15 | `tail` filters and bounded event queries         | M          | Medium | Fair             | Candidate   | Preserve raw JSONL output semantics                       |
+|   16 | Capability changes between successful builds     | M          | Medium | Fair             | Candidate   | Normalized runtime capability snapshots                   |
 
-### Candidate requirements
+### Feature requirements
+
+#### Private state and audit artifact permissions
+
+- create DevGuard-owned project state and log directories with private permissions
+- create Gateway tokens, snapshots, ownership markers, audit logs, and raw streams as private files
+- retain existing permissions when they are stricter than the required maximum
+- make `doctor` report overly broad permissions on supported hosts
+- repair permissions only for canonical DevGuard-owned paths and never follow an ownership marker outside them
+
+#### Single-supervisor ownership and port diagnostics
+
+- acquire an exclusive per-project ownership marker before starting build, watch, or Gateway work
+- include the run ID, process ID, project identity, configured port, and creation time in the marker
+- distinguish a live owner from a stale marker using bounded host checks
+- reject a second live supervisor with an actionable message
+- diagnose an occupied Gateway port without killing or signaling an unrelated process
+- release ownership after normal shutdown and safely recover a stale marker without claiming ownership of an unrelated process
 
 #### Strict policy plumbing and mode-aware readiness
 
@@ -681,6 +735,20 @@ Effort-to-impact is qualitative:
 - preserve target plugin pre- and post-tool lifecycle behavior
 - redact sensitive inputs and avoid recording raw outputs by default
 - block in every mode when a required audit record cannot be written
+
+#### Stable CLI output and exit contract
+
+- test success, operational failure, readiness failure, and operator-shutdown exit behavior
+- keep human results on standard output and diagnostics on standard error
+- preserve clean machine-readable standard output in every JSON mode
+- reserve additional numeric exit codes until a real caller requires stable failure categories
+
+#### Supported host platform contract
+
+- derive the advertised host list from CI and operational evidence
+- fail before state mutation on unsupported hosts
+- exercise filesystem permissions, paths, signals, process ownership, and Gateway supervision on every supported host
+- describe unsupported platforms explicitly rather than treating them as implicitly compatible
 
 #### Native OpenClaw `approve` mode
 
@@ -710,6 +778,14 @@ Effort-to-impact is qualitative:
 - pass only an intentional Gateway baseline plus explicitly selected values
 - report variable names rather than values
 - describe this as credential hygiene, not target-plugin isolation
+
+#### Audit retention and size warnings
+
+- keep active records append-only and preserve them during `restore`
+- define and document a size threshold that produces an actionable warning
+- surface the warning through `run` and `doctor` without making log size a safety failure
+- require explicit operator action before deleting, truncating, pruning, or rotating logs
+- preserve complete JSONL records and predictable `tail` behavior if rotation is added later
 
 #### Explicit run-scoped `allow` mode
 
@@ -754,13 +830,18 @@ These items are intentionally not candidates on the path to `1.0.0`:
 7. `allow` requires a conspicuous run-scoped selection, permits real OpenClaw execution, and blocks when required audit logging fails.
 8. Startup output, live status, logs, and `doctor` agree on the active policy mode and loaded target build.
 9. Sensitive environment values and tool inputs are redacted according to the logging contract.
-10. Runtime capability inspection distinguishes tool-covered and uncovered plugin surfaces without claiming arbitrary-code isolation.
-11. Editing the target plugin triggers non-overlapping build, validation, and controlled Gateway replacement while preserving the last working Gateway on failure.
-12. Owned build, validation, and Gateway processes have bounded shutdown behavior, and incomplete process-tree cleanup is reported honestly.
-13. OpenClaw public-contract incompatibilities fail with actionable diagnostics.
-14. `restore` returns DevGuard-managed profile configuration to its prior state while preserving logs.
-15. CI-first operational scenarios cover the default deny path and every real-execution mode without relying on the developer's normal OpenClaw profile.
-16. Documentation clearly explains real side effects in `approve` and `allow`, direct target-plugin host access, and every excluded product boundary.
+10. DevGuard-owned state directories and sensitive artifacts use the private permission contract, and `doctor` reports unsafe permissions.
+11. Only one live supervisor can own a project, and stale ownership or occupied ports fail with actionable diagnostics without signaling unrelated processes.
+12. Human and JSON output boundaries and success, failure, and operator-shutdown exit behavior satisfy the CLI contract.
+13. Every advertised host platform has CI and operational evidence for permissions, paths, signals, process ownership, and Gateway supervision.
+14. Append-only audit logs warn at the documented size threshold and are never deleted or rotated implicitly.
+15. Runtime capability inspection distinguishes tool-covered and uncovered plugin surfaces without claiming arbitrary-code isolation.
+16. Editing the target plugin triggers non-overlapping build, validation, and controlled Gateway replacement while preserving the last working Gateway on failure.
+17. Owned build, validation, and Gateway processes have bounded shutdown behavior, and incomplete process-tree cleanup is reported honestly.
+18. OpenClaw public-contract incompatibilities fail with actionable diagnostics.
+19. `restore` returns DevGuard-managed profile configuration to its prior state while preserving logs.
+20. CI-first operational scenarios cover the default deny path and every real-execution mode without relying on the developer's normal OpenClaw profile.
+21. Documentation clearly explains real side effects in `approve` and `allow`, direct target-plugin host access, and every excluded product boundary.
 
 ## Product Positioning
 
