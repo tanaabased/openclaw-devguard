@@ -11,21 +11,21 @@ mkdir -p "$TMPDIR/plugin"
 cp "$GITHUB_WORKSPACE/examples/plugin/index.mjs" "$GITHUB_WORKSPACE/examples/plugin/openclaw.plugin.json" "$GITHUB_WORKSPACE/examples/plugin/package.json" "$TMPDIR/plugin"
 
 # should install and enable packed devguard
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
+openclaw plugins install "$DEVGUARD_PACKAGE" --force
+openclaw plugins enable openclaw-devguard
 
 # should create and then reuse the target project configuration
 set -o pipefail
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "created"
+openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "created"
 set -o pipefail
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "reused"
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard profile "$TMPDIR/plugin" > "$TMPDIR/devguard-profile"
+openclaw devguard init "$TMPDIR/plugin" 2>&1 | grep -F "config" | grep -F "reused"
+openclaw devguard profile "$TMPDIR/plugin" > "$TMPDIR/devguard-profile"
 find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
 dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start a verified supervised gateway
-(cd "$TMPDIR/plugin" && exec openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 60 "$(cat "$TMPDIR/run.pid")"
 ```
@@ -37,7 +37,7 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 set -o pipefail
 grep -F '"id"' "$TMPDIR/plugin/devguard.json" | grep -F '"devguard-example"'
 test -f "$TMPDIR/plugin/index.mjs"
-(cd "$TMPDIR/plugin" && openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard doctor) > "$TMPDIR/doctor.log" 2>&1
+(cd "$TMPDIR/plugin" && openclaw devguard doctor) > "$TMPDIR/doctor.log" 2>&1
 grep -F "pass" "$TMPDIR/doctor.log" | grep -F "target plugin id"
 grep -F "pass" "$TMPDIR/doctor.log" | grep -F "live target plugin"
 

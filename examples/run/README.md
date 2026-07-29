@@ -11,15 +11,15 @@ command -v openclaw >/dev/null
 test -f "$GITHUB_WORKSPACE/devguard.json"
 
 # should install and enable packed devguard
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
+openclaw plugins install "$DEVGUARD_PACKAGE" --force
+openclaw plugins enable openclaw-devguard
 
 # should initialize devguard as its own target
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE"
+openclaw devguard init "$GITHUB_WORKSPACE"
 
 # should complete one supervised run
 set -o pipefail
-(cd "$GITHUB_WORKSPACE" && openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard run --once) 2>&1 | tee "$TMPDIR/run.log"
+(cd "$GITHUB_WORKSPACE" && openclaw devguard run --once) 2>&1 | tee "$TMPDIR/run.log"
 ```
 
 ## Testing

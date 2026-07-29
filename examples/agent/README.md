@@ -16,26 +16,26 @@ cp -R "$GITHUB_WORKSPACE/examples/agent/riker" "$TMPDIR/source-riker"
 
 # should register both agents and persist only picard identity in the source profile
 set -o pipefail
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" agents add picard --workspace "$TMPDIR/source-picard" --non-interactive --json | grep -F '"agentId"' | grep -F '"picard"'
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" agents add riker --workspace "$TMPDIR/source-riker" --non-interactive --json | grep -F '"agentId"' | grep -F '"riker"'
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" agents set-identity --agent picard --workspace "$TMPDIR/source-picard" --from-identity --json | grep -F '"agentId"' | grep -F '"picard"'
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config get 'agents.list[0].id' --json | grep -F '"main"'
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config get 'agents.list[1].id' --json | grep -F '"picard"'
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config get 'agents.list[1].identity.name' --json | grep -F '"Jean-Luc Picard"'
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config get 'agents.list[2].id' --json | grep -F '"riker"'
-if openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config get 'agents.list[2].identity' --json > "$TMPDIR/source-riker-identity.log" 2>&1; then exit 1; fi
+openclaw agents add picard --workspace "$TMPDIR/source-picard" --non-interactive --json | grep -F '"agentId"' | grep -F '"picard"'
+openclaw agents add riker --workspace "$TMPDIR/source-riker" --non-interactive --json | grep -F '"agentId"' | grep -F '"riker"'
+openclaw agents set-identity --agent picard --workspace "$TMPDIR/source-picard" --from-identity --json | grep -F '"agentId"' | grep -F '"picard"'
+openclaw config get 'agents.list[0].id' --json | grep -F '"main"'
+openclaw config get 'agents.list[1].id' --json | grep -F '"picard"'
+openclaw config get 'agents.list[1].identity.name' --json | grep -F '"Jean-Luc Picard"'
+openclaw config get 'agents.list[2].id' --json | grep -F '"riker"'
+if openclaw config get 'agents.list[2].identity' --json > "$TMPDIR/source-riker-identity.log" 2>&1; then exit 1; fi
 test ! -e "$TMPDIR/source-picard/BOOTSTRAP.md"
 test ! -e "$TMPDIR/source-riker/BOOTSTRAP.md"
 
 # should install and enable packed devguard in the source profile
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config file | sed "s|^~|$HOME|" > "$TMPDIR/source-config-path"
+openclaw plugins install "$DEVGUARD_PACKAGE" --force
+openclaw plugins enable openclaw-devguard
+openclaw config file | sed "s|^~|$HOME|" > "$TMPDIR/source-config-path"
 cp "$(cat "$TMPDIR/source-config-path")" "$TMPDIR/source-before.json"
 
 # should initialize devguard with both agents and no model transfer
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE" --agent picard --agent riker --no-model-profile > "$TMPDIR/init.log" 2>&1
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
+openclaw devguard init "$GITHUB_WORKSPACE" --agent picard --agent riker --no-model-profile > "$TMPDIR/init.log" 2>&1
+openclaw devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
 openclaw --profile "$(cat "$TMPDIR/devguard-profile")" config file | sed "s|^~|$HOME|" > "$TMPDIR/config-path"
 dirname "$(cat "$TMPDIR/config-path")" > "$TMPDIR/state-path"
 find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
@@ -43,7 +43,7 @@ dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start the isolated gateway with both imported identities
-(cd "$GITHUB_WORKSPACE" && exec openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 60 "$(cat "$TMPDIR/run.pid")"
 ```

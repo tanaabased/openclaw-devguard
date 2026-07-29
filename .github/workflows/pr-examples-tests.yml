@@ -81,8 +81,6 @@ jobs:
           NO_COLOR: '1'
           OPENAI_API_KEY: ${{ secrets.TANAAB_ALTERNATE_MALE_KEY }}
           OPENAI_MODEL: gpt-5.4-nano
-          OPENCLAW_SKIP_CHANNELS: '1'
-          OPENCLAW_SOURCE_PROFILE: leia-${{ matrix.example }}
           TMPDIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp
         run: |
           mkdir -p "$TMPDIR"

@@ -9,7 +9,7 @@ This scenario dogfoods DevGuard's self-target path while verifying that initiali
 test -f "$DEVGUARD_PACKAGE"
 test -n "$OPENAI_API_KEY"
 test -n "$OPENAI_MODEL"
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" onboard --non-interactive --accept-risk \
+openclaw onboard --non-interactive --accept-risk \
   --mode local \
   --auth-choice openai-api-key \
   --openai-api-key "$OPENAI_API_KEY" \
@@ -25,25 +25,25 @@ openclaw --profile "$OPENCLAW_SOURCE_PROFILE" onboard --non-interactive --accept
   --skip-skills \
   --skip-ui \
   --suppress-gateway-token-output
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" models set "openai/$OPENAI_MODEL"
+openclaw models set "openai/$OPENAI_MODEL"
 
 # should install and enable packed devguard in the source profile
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins install "$DEVGUARD_PACKAGE" --force
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" plugins enable openclaw-devguard
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" config file | sed "s|^~|$HOME|" > "$TMPDIR/source-config-path"
+openclaw plugins install "$DEVGUARD_PACKAGE" --force
+openclaw plugins enable openclaw-devguard
+openclaw config file | sed "s|^~|$HOME|" > "$TMPDIR/source-config-path"
 cp "$(cat "$TMPDIR/source-config-path")" "$TMPDIR/source-before.json"
 
 # should initialize devguard with the source model profile
 unset OPENAI_API_KEY
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard init "$GITHUB_WORKSPACE" > "$TMPDIR/init.log" 2>&1
-openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
+openclaw devguard init "$GITHUB_WORKSPACE" > "$TMPDIR/init.log" 2>&1
+openclaw devguard profile "$GITHUB_WORKSPACE" > "$TMPDIR/devguard-profile"
 find "$DEVGUARD_HOME/projects" -name init.json -print -quit > "$TMPDIR/marker-path"
 dirname "$(cat "$TMPDIR/marker-path")" > "$TMPDIR/project-path"
 printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-path"
 
 # should start a live gateway with imported authentication
 unset OPENAI_API_KEY
-(cd "$GITHUB_WORKSPACE" && exec openclaw --profile "$OPENCLAW_SOURCE_PROFILE" devguard run > "$TMPDIR/run.log" 2>&1) &
+(cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
 node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 90 "$(cat "$TMPDIR/run.pid")"
 ```
