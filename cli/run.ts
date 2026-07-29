@@ -24,6 +24,8 @@ import {
 } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 
+const DEFAULT_GATEWAY_STARTUP_TIMEOUT_MS = 60_000;
+
 export interface RunDevguardOptions {
   environment?: NodeJS.ProcessEnv;
   logger: Logger;
@@ -195,7 +197,7 @@ export default async function runDevguard(
             {},
             { deviceIdentity: null, progress: false },
           ),
-        timeoutMs: options.startupTimeoutMs ?? 20_000,
+        timeoutMs: options.startupTimeoutMs ?? DEFAULT_GATEWAY_STARTUP_TIMEOUT_MS,
       }).then(
         (status) => {
           if (!status || activeGatewayBuildId !== expectedBuildId) return;
