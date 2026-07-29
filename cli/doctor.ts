@@ -19,7 +19,7 @@ import processCommand, {
   type ProcessCommandOptions,
   type ProcessCommandResult,
 } from '../lib/process-command.ts';
-import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
+import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 import doctorChecks, { latestSuccessfulBuildId } from '../utils/doctor-checks.ts';
 import isolatedOpenClawEnvironment, {
@@ -104,7 +104,7 @@ export default async function doctorDevguard(
   projectRoot: string,
   options: DoctorDevguardOptions,
 ): Promise<void> {
-  const root = resolve(projectRoot);
+  const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);

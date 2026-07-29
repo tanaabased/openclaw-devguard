@@ -24,6 +24,7 @@ describe('cli/tail', () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-tail-'));
     const devguardHome = join(root, 'home');
     const paths = resolveProjectPaths(root, config.plugin.id, { DEVGUARD_HOME: devguardHome });
+    const nested = join(root, 'examples', 'tail');
     const writes: string[] = [];
     const warnings: string[] = [];
     const logger: Logger = {
@@ -33,7 +34,10 @@ describe('cli/tail', () => {
     };
 
     try {
-      await mkdir(dirname(paths.logPath), { recursive: true });
+      await Promise.all([
+        mkdir(dirname(paths.logPath), { recursive: true }),
+        mkdir(nested, { recursive: true }),
+      ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(
@@ -46,7 +50,7 @@ describe('cli/tail', () => {
         ),
       ]);
 
-      await tailDevguard(root, {
+      await tailDevguard(nested, {
         environment: { DEVGUARD_HOME: devguardHome },
         follow: false,
         logger,

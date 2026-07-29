@@ -22,4 +22,5 @@ openclaw devguard exec -- config file | grep -F ".openclaw-devguard-openclaw-dev
 
 # should preserve a native command failure
 if openclaw devguard exec -- config get devguard.missing --json > "$TMPDIR/missing.log" 2>&1; then exit 1; fi
+if grep -Fq 'exec failed' "$TMPDIR/missing.log"; then cat "$TMPDIR/missing.log"; exit 1; fi
 ```

@@ -25,6 +25,7 @@ describe('cli/doctor', () => {
     const devguardHome = join(root, 'home');
     const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
     const paths = resolveProjectPaths(root, config.plugin.id, environment);
+    const nested = join(root, 'examples', 'doctor');
     const writes: string[] = [];
     const commands: string[][] = [];
     const logger: Logger = { info() {}, warn() {}, error() {} };
@@ -46,6 +47,7 @@ describe('cli/doctor', () => {
       await Promise.all([
         mkdir(paths.stateDirectory, { recursive: true }),
         mkdir(dirname(paths.logPath), { recursive: true }),
+        mkdir(nested, { recursive: true }),
       ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
@@ -68,7 +70,7 @@ describe('cli/doctor', () => {
         ),
       ]);
 
-      await doctorDevguard(root, {
+      await doctorDevguard(nested, {
         environment,
         logger,
         output: { writeStdout: (value) => writes.push(value) },

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import {
   defaultCliOutput,
@@ -11,7 +11,7 @@ import {
   writeCliLines,
 } from '../lib/cli-output.ts';
 import { type Logger, reportError } from '../lib/logger.ts';
-import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
+import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 import parseRestoreMarker, { type RestoreMarker } from '../utils/restore-marker.ts';
 
@@ -65,7 +65,7 @@ export default async function restoreDevguard(
   projectRoot: string,
   options: RestoreDevguardOptions,
 ): Promise<RestoreDevguardResult> {
-  const root = resolve(projectRoot);
+  const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);

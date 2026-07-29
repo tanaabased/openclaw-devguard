@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { defaultCliOutput, type CliOutput } from '../lib/cli-output.ts';
-import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
+import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
 
 export interface ProfileDevguardOptions {
@@ -14,7 +14,7 @@ export default async function profileDevguard(
   projectRoot: string,
   options: ProfileDevguardOptions = {},
 ): Promise<string> {
-  const root = resolve(projectRoot);
+  const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);

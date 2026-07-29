@@ -1,5 +1,3 @@
-import { resolve } from 'node:path';
-
 import {
   defaultCliOutput,
   formatCliAction,
@@ -9,7 +7,7 @@ import {
 } from '../lib/cli-output.ts';
 import tailLogFile from '../lib/log-tail.ts';
 import { logWarn, type Logger } from '../lib/logger.ts';
-import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
+import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import runtimeEventDisplay from '../utils/runtime-event-display.ts';
 
 export interface TailDevguardOptions {
@@ -34,7 +32,7 @@ export default async function tailDevguard(
   projectRoot: string,
   options: TailDevguardOptions,
 ): Promise<void> {
-  const root = resolve(projectRoot);
+  const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);

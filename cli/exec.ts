@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
-import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
+import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import processCommand, {
   type ProcessCommandOptions,
   type ProcessCommandResult,
@@ -31,7 +31,7 @@ export default async function execDevguard(
     throw new Error('OpenClaw command arguments are required after --');
   }
 
-  const root = resolve(projectRoot);
+  const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);

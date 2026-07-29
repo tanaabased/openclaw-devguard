@@ -25,10 +25,14 @@ describe('cli/profile', () => {
       HOME: join(root, 'user-home'),
     };
     const paths = resolveProjectPaths(root, config.plugin.id, environment);
+    const nested = join(root, 'examples', 'profile');
     const writes: string[] = [];
 
     try {
-      await mkdir(paths.projectStateRoot, { recursive: true });
+      await Promise.all([
+        mkdir(paths.projectStateRoot, { recursive: true }),
+        mkdir(nested, { recursive: true }),
+      ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(
@@ -42,7 +46,7 @@ describe('cli/profile', () => {
         ),
       ]);
 
-      const result = await profileDevguard(root, {
+      const result = await profileDevguard(nested, {
         environment,
         output: { writeStdout: (value) => writes.push(value) },
       });

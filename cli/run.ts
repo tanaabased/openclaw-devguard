@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
@@ -17,11 +17,7 @@ import {
 import waitForGatewayStatus, { type GatewayStatus } from '../lib/gateway-status.ts';
 import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
 import createProjectWatcher from '../lib/project-watcher.ts';
-import {
-  DEVGUARD_PROJECT_FILE,
-  readProjectConfig,
-  resolveProjectPaths,
-} from '../lib/project-config.ts';
+import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
@@ -53,18 +49,7 @@ export default async function runDevguard(
   projectRoot: string,
   options: RunDevguardOptions,
 ): Promise<GatewayStatus> {
-  const root = resolve(projectRoot);
-  try {
-    await readFile(join(root, DEVGUARD_PROJECT_FILE), 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(`Run "openclaw devguard init ." first; ${DEVGUARD_PROJECT_FILE} is missing`, {
-        cause: error,
-      });
-    }
-    throw error;
-  }
-
+  const root = await findProjectRoot(projectRoot);
   const config = await readProjectConfig(root);
   const environment = options.environment ?? process.env;
   const output = options.output ?? defaultCliOutput;

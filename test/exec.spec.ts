@@ -29,6 +29,7 @@ describe('cli/exec', () => {
       SOURCE_ONLY: 'retained',
     };
     const paths = resolveProjectPaths(root, config.plugin.id, environment);
+    const nested = join(root, 'examples', 'exec');
     const calls: Parameters<ExecCommandRunner>[] = [];
     const runCommand: ExecCommandRunner = async (...args) => {
       calls.push(args);
@@ -36,7 +37,10 @@ describe('cli/exec', () => {
     };
 
     try {
-      await mkdir(paths.projectStateRoot, { recursive: true });
+      await Promise.all([
+        mkdir(paths.projectStateRoot, { recursive: true }),
+        mkdir(nested, { recursive: true }),
+      ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(
@@ -50,10 +54,14 @@ describe('cli/exec', () => {
         ),
       ]);
 
-      const exitCode = await execDevguard(root, ['config', 'get', 'ui.assistant.name', '--json'], {
-        environment,
-        runCommand,
-      });
+      const exitCode = await execDevguard(
+        nested,
+        ['config', 'get', 'ui.assistant.name', '--json'],
+        {
+          environment,
+          runCommand,
+        },
+      );
 
       assert.equal(exitCode, 23);
       assert.equal(calls.length, 1);

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   createProjectConfig,
+  findProjectRoot,
   parseProjectConfig,
   resolveProjectPaths,
 } from '../lib/project-config.ts';
@@ -31,6 +32,37 @@ describe('lib/project-config', () => {
       () => parseProjectConfig({ ...validConfig, unsafe: true }),
       /contains unknown keys: unsafe/,
     );
+  });
+
+  it('should find the nearest project from a nested directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'devguard-project-root-'));
+    const projectRoot = join(root, 'project');
+    const nested = join(projectRoot, 'examples', 'nested');
+
+    try {
+      await mkdir(nested, { recursive: true });
+      await Promise.all([
+        writeFile(join(root, 'devguard.json'), JSON.stringify(validConfig)),
+        writeFile(join(projectRoot, 'devguard.json'), JSON.stringify(validConfig)),
+      ]);
+
+      assert.equal(await findProjectRoot(nested), projectRoot);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('should explain how to initialize when no project can be found', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'devguard-no-project-'));
+
+    try {
+      await assert.rejects(
+        () => findProjectRoot(root),
+        /Could not find devguard\.json.*openclaw devguard init <plugin-path>/,
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('should infer plugin commands and watched entrypoints', async () => {

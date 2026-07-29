@@ -35,6 +35,7 @@ describe('cli/restore', () => {
     const devguardHome = join(root, 'home');
     const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
     const paths = resolveProjectPaths(root, config.plugin.id, environment);
+    const nested = join(root, 'examples', 'restore');
     const configPath = join(paths.stateDirectory, 'openclaw.json');
     const markerPath = join(paths.projectStateRoot, 'init.json');
     const snapshotPath = join(paths.projectStateRoot, 'openclaw.before-devguard.json');
@@ -44,6 +45,7 @@ describe('cli/restore', () => {
       await Promise.all([
         mkdir(paths.stateDirectory, { recursive: true }),
         mkdir(dirname(paths.logPath), { recursive: true }),
+        mkdir(nested, { recursive: true }),
       ]);
       await Promise.all([
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
@@ -63,12 +65,12 @@ describe('cli/restore', () => {
         ),
       ]);
 
-      const first = await restoreDevguard(root, {
+      const first = await restoreDevguard(nested, {
         environment,
         logger,
         output: { writeStdout: (value) => writes.push(value) },
       });
-      const second = await restoreDevguard(root, {
+      const second = await restoreDevguard(nested, {
         environment,
         logger,
         output: { writeStdout: (value) => writes.push(value) },

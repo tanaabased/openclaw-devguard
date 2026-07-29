@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { resolveRequiredHomeDir } from 'openclaw/plugin-sdk/state-paths';
 
@@ -134,6 +134,29 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function findProjectRoot(startPath: string): Promise<string> {
+  const initialPath = resolve(startPath);
+  let candidate = initialPath;
+
+  while (true) {
+    try {
+      await access(join(candidate, DEVGUARD_PROJECT_FILE));
+      return candidate;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+    }
+
+    const parent = dirname(candidate);
+    if (parent === candidate) break;
+    candidate = parent;
+  }
+
+  throw new Error(
+    `Could not find ${DEVGUARD_PROJECT_FILE} in ${initialPath} or any parent directory; run "openclaw devguard init <plugin-path>" first`,
+  );
 }
 
 function inferBuild(packageMetadata: PackageMetadata): DevguardProjectConfig['plugin']['build'] {
