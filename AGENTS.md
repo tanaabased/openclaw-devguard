@@ -6,6 +6,13 @@
 - Keep tests flat in `test/` and name specs after the behavior they own.
 - Treat `SPEC.md` as product intent, not evidence that a feature has been implemented.
 
+## Product boundary
+
+- Treat agent-requested tool activity as untrusted and target plugin code as developer-controlled. Keep DevGuard focused on supervising developer-controlled OpenClaw plugin workflows through public OpenClaw lifecycle, inspection, diagnostic, and tool-policy APIs.
+- DevGuard may capture, deny, request native OpenClaw approval for, or explicitly pass through real tool calls. Deny must remain the default; approval and allow behavior must be explicit, auditable, visibly surfaced, and fail closed when configuration, approval routing, or audit logging fails.
+- Do not expand DevGuard into an arbitrary-code isolation or simulation platform. Container or VM orchestration, direct Node.js API interception, synthetic tool success, command simulation, fixture or replay engines, production policy enforcement, and remote or multi-user runtime management are out of scope unless the project is explicitly rechartered.
+- Prefer real OpenClaw execution outcomes and clearly stated limitations over fake success, permissive fallbacks, or partial isolation claims.
+
 ## Runtime and tooling
 
 - Use the Bun version pinned in `.bun-version` for installs, scripts, and builds.
