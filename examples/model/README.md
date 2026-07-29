@@ -26,6 +26,9 @@ openclaw onboard --non-interactive --accept-risk \
   --skip-skills \
   --skip-ui \
   --suppress-gateway-token-output > "$TMPDIR/onboard.log" 2>&1
+openclaw config set models.providers.openai.models \
+  "[{\"id\":\"$OPENAI_MODEL\",\"name\":\"$OPENAI_MODEL\"}]" \
+  --strict-json --replace >> "$TMPDIR/onboard.log" 2>&1
 openclaw models set "openai/$OPENAI_MODEL" >> "$TMPDIR/onboard.log" 2>&1
 
 # should install and enable packed devguard in the source profile
