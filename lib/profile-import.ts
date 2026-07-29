@@ -1,5 +1,5 @@
-import { mkdir } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { access, mkdir } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 
 import {
   DEFAULT_PROVIDER,
@@ -17,21 +17,33 @@ import {
 } from 'openclaw/plugin-sdk/agent-runtime';
 import { loadConfig, type OpenClawConfig } from 'openclaw/plugin-sdk/config-runtime';
 
+import processCommand, {
+  type ProcessCommandOptions,
+  type ProcessCommandResult,
+} from './process-command.ts';
 import {
   normalizeAgentIds,
   providerFromModelRef,
   selectAuthProfiles,
   type AuthImportSelection,
 } from '../utils/profile-import.ts';
+import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
 
 type AgentEntry = NonNullable<NonNullable<OpenClawConfig['agents']>['list']>[number];
 type AgentIdentity = NonNullable<AgentEntry['identity']>;
 type AgentModelConfig = NonNullable<AgentEntry['model']>;
 
+type ProfileImportCommand = (
+  command: string,
+  args: readonly string[],
+  options?: ProcessCommandOptions,
+) => Promise<ProcessCommandResult>;
+
 export interface ProfileImportDependencies {
   ensureAgentDir?: (agentDir: string) => Promise<void>;
   loadAuthStore?: (agentDir: string) => AuthProfileStore;
   loadSourceConfig?: () => OpenClawConfig;
+  runCommand?: ProfileImportCommand;
   saveAuthStore?: (store: AuthProfileStore, agentDir: string) => void;
 }
 
@@ -81,6 +93,7 @@ export interface ResolvedProfileImport {
   };
   configPatch: Record<string, unknown>;
   modelRefs: string[];
+  workspaceIdentityImports: Array<{ agentId: string; workspace: string }>;
 }
 
 const emptyStore = (): AuthProfileStore => ({ version: 1, profiles: {} });
@@ -392,7 +405,42 @@ export function resolveProfileImport(
     auth,
     configPatch: profileConfigPatch(prepared, agentAuth),
     modelRefs: normalizeAgentIds(prepared.agents.flatMap((agent) => modelRefs(agent.model))),
+    workspaceIdentityImports: prepared.agents.flatMap((agent) =>
+      agent.identity ? [] : [{ agentId: agent.id, workspace: agent.workspace }],
+    ),
   };
+}
+
+export async function applyProfileIdentityImport(
+  resolved: ResolvedProfileImport,
+  destinationStateDirectory: string,
+  environment: NodeJS.ProcessEnv,
+  dependencies: ProfileImportDependencies = {},
+): Promise<void> {
+  const runCommand = dependencies.runCommand ?? processCommand;
+  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, destinationStateDirectory);
+  for (const { agentId, workspace } of resolved.workspaceIdentityImports) {
+    try {
+      await access(join(workspace, 'IDENTITY.md'));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+      throw error;
+    }
+    await runCommand(
+      'openclaw',
+      [
+        'agents',
+        'set-identity',
+        '--agent',
+        agentId,
+        '--workspace',
+        workspace,
+        '--from-identity',
+        '--json',
+      ],
+      { env: isolatedEnvironment },
+    );
+  }
 }
 
 export async function applyProfileAuthImport(

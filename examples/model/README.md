@@ -53,7 +53,6 @@ node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/lo
 ```bash
 # should import the model and portable authentication without changing the source config
 cmp "$TMPDIR/source-before.json" "$OPENCLAW_STATE_DIR/openclaw.json"
-node "$GITHUB_WORKSPACE/scripts/leia-profile-cli.mjs" assert-model "$(cat "$TMPDIR/state-path")" "$OPENCLAW_STATE_DIR"
 
 # should report the imported model without exposing credential material
 set -o pipefail

@@ -17,8 +17,10 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Inspect DevGuard's existing logs directly when they are the observable lifecycle or safety record; do not duplicate command output into a temporary log merely to grep it.
 - When one stateful invocation must support multiple assertions, capture it once and reuse that output instead of rerunning the command.
 - Chain fixed-string greps when stable tokens must occur on the same line; do not make CLI alignment padding part of an operational scenario contract.
-- Prefer an existing semantic checker for complex structured contracts, but do not add a utility merely to replace a clear fixed-string JSON or JSONL assertion.
-- Keep shared semantic checkers and process coordination in `scripts/leia-*-cli.mjs`; do not add a helper for fixture creation or straightforward shell assertions.
+- Prefer public product CLI output, existing product logs, and ordinary shell assertions over repository-owned semantic checkers.
+- Reserve `scripts/leia-*-cli.mjs` for bounded process coordination or relational assertions across multiple records that would be materially less clear or portable in shell.
+- Do not use a helper to inspect OpenClaw configuration or authentication through SDK APIs when the scenario can prove its behavior through public CLI commands.
+- Keep example-specific expected values in the owning README or fixture; shared support scripts must not embed fixture identities or other scenario-specific data.
 - Use lowercase behavior prose unless exact command, flag, environment, product, or file casing is part of the contract.
 - Do not use literal backticks or braced shell expansions inside executable blocks.
 - Keep immediate child directories limited to matrix-backed scenario names; `AGENTS.md` and `package.json` remain root boundary files.

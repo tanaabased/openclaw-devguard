@@ -22,6 +22,7 @@ import processCommand, {
 import { readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 import doctorChecks, { latestSuccessfulBuildId } from '../utils/doctor-checks.ts';
+import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
 
 interface Attempt<T> {
   error?: string;
@@ -98,11 +99,9 @@ export default async function doctorDevguard(
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);
   const paths = resolveProjectPaths(root, config.plugin.id, environment);
-  const isolatedEnvironment = {
-    ...environment,
+  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, paths.stateDirectory, {
     OPENCLAW_SKIP_CHANNELS: '1',
-    OPENCLAW_STATE_DIR: paths.stateDirectory,
-  };
+  });
   const runCommand = options.runCommand ?? processCommand;
   const output = options.output ?? defaultCliOutput;
   const events = createRuntimeEventRecorder({

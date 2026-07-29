@@ -23,6 +23,7 @@ import {
   resolveProjectPaths,
 } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
+import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
 
 const DEFAULT_GATEWAY_STARTUP_TIMEOUT_MS = 60_000;
 
@@ -101,17 +102,16 @@ export default async function runDevguard(
   const gatewayFailure = new Promise<Error>((resolvePromise) => {
     resolveGatewayFailure = resolvePromise;
   });
-  const isolatedEnvironment = (): NodeJS.ProcessEnv => ({
-    ...environment,
-    OPENCLAW_STATE_DIR: paths.stateDirectory,
-    OPENCLAW_SKIP_CHANNELS: '1',
-    OPENCLAW_PLUGIN_LIFECYCLE_TRACE: '1',
-    OPENCLAW_DIAGNOSTICS: 'plugin.load-profile',
-    DEVGUARD_BUILD_ID: buildId,
-    DEVGUARD_LOG_PATH: paths.logPath,
-    DEVGUARD_TARGET_PLUGIN_ID: config.plugin.id,
-    DEVGUARD_ENV_PREVIEW_ALLOWLIST: config.logging.environmentValueAllowlist.join(','),
-  });
+  const isolatedEnvironment = (): NodeJS.ProcessEnv =>
+    isolatedOpenClawEnvironment(environment, paths.stateDirectory, {
+      OPENCLAW_SKIP_CHANNELS: '1',
+      OPENCLAW_PLUGIN_LIFECYCLE_TRACE: '1',
+      OPENCLAW_DIAGNOSTICS: 'plugin.load-profile',
+      DEVGUARD_BUILD_ID: buildId,
+      DEVGUARD_LOG_PATH: paths.logPath,
+      DEVGUARD_TARGET_PLUGIN_ID: config.plugin.id,
+      DEVGUARD_ENV_PREVIEW_ALLOWLIST: config.logging.environmentValueAllowlist.join(','),
+    });
   const validation = config.plugin.validate;
 
   const runner = createDevRunner({

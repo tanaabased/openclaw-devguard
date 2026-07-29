@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,6 +15,7 @@ import type { OpenClawConfig } from 'openclaw/plugin-sdk/config-runtime';
 
 import {
   applyProfileAuthImport,
+  applyProfileIdentityImport,
   emptyAuthProfileStore,
   prepareProfileImport,
   resolveProfileImport,
@@ -91,6 +92,9 @@ describe('lib/profile-import', () => {
     const patch = resolved.configPatch as OpenClawConfig;
 
     assert.deepEqual(resolved.agentIds, ['main', 'ops']);
+    assert.deepEqual(resolved.workspaceIdentityImports, [
+      { agentId: 'main', workspace: '/source/workspaces/main' },
+    ]);
     assert.deepEqual(resolved.modelRefs, [
       'openai/model-main',
       'other/model-fallback',
@@ -128,6 +132,81 @@ describe('lib/profile-import', () => {
     assert.notEqual(patch.agents?.list?.[1]?.identity, sourceConfig.agents?.list?.[1]?.identity);
     assert.deepEqual(Object.keys(patch.models?.providers ?? {}).sort(), ['openai', 'other']);
     assert.equal(resolved.auth.copied, 2);
+  });
+
+  it('should load a workspace-only identity through isolated openclaw state', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'devguard-profile-identity-'));
+    const workspace = join(root, 'devbot');
+    const destinationStateDirectory = join(root, 'isolated');
+    const environment = {
+      OPENCLAW_CONFIG_PATH: join(root, 'source', 'openclaw.json'),
+      OPENCLAW_STATE_DIR: join(root, 'source'),
+    };
+    const commands: Array<{
+      args: readonly string[];
+      command: string;
+      environment: NodeJS.ProcessEnv | undefined;
+    }> = [];
+
+    try {
+      await mkdir(workspace, { recursive: true });
+      await writeFile(join(workspace, 'IDENTITY.md'), '- Name: Devbot\n', 'utf8');
+      const prepared = prepareProfileImport({
+        agentIds: ['devbot'],
+        copyModelProfile: false,
+        destinationStateDirectory,
+        environment,
+        dependencies: {
+          loadSourceConfig: () => ({
+            agents: {
+              list: [
+                {
+                  id: 'main',
+                  default: true,
+                  identity: { name: 'Main' },
+                  workspace: join(root, 'main'),
+                },
+                { id: 'devbot', workspace },
+              ],
+            },
+          }),
+        },
+      });
+      const resolved = resolveProfileImport(prepared, false);
+
+      assert.deepEqual(resolved.workspaceIdentityImports, [{ agentId: 'devbot', workspace }]);
+      await applyProfileIdentityImport(resolved, destinationStateDirectory, environment, {
+        runCommand: async (command, args, options) => {
+          commands.push({ args, command, environment: options?.env });
+          return { code: 0, output: '{}' };
+        },
+      });
+
+      assert.deepEqual(commands, [
+        {
+          command: 'openclaw',
+          args: [
+            'agents',
+            'set-identity',
+            '--agent',
+            'devbot',
+            '--workspace',
+            workspace,
+            '--from-identity',
+            '--json',
+          ],
+          environment: {
+            OPENCLAW_STATE_DIR: destinationStateDirectory,
+          },
+        },
+      ]);
+      assert.deepEqual(environment, {
+        OPENCLAW_CONFIG_PATH: join(root, 'source', 'openclaw.json'),
+        OPENCLAW_STATE_DIR: join(root, 'source'),
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('should reject unknown requested agents before resolving auth stores', () => {

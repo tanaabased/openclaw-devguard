@@ -20,11 +20,13 @@ import {
 import { logDebug, logInfo, type Logger } from '../lib/logger.ts';
 import {
   applyProfileAuthImport,
+  applyProfileIdentityImport,
   prepareProfileImport,
   resolveProfileImport,
   type ProfileImportDependencies,
   type ResolvedProfileImport,
 } from '../lib/profile-import.ts';
+import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
 
 export interface InitDevguardOptions {
   agentIds?: string[];
@@ -164,7 +166,7 @@ async function configureIsolatedState(
   environment: NodeJS.ProcessEnv,
   profilePatch: Record<string, unknown>,
 ): Promise<void> {
-  const isolatedEnvironment = { ...environment, OPENCLAW_STATE_DIR: stateDirectory };
+  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, stateDirectory);
   const tokenPath = join(dirname(stateDirectory), 'gateway-token');
   let gatewayToken: string;
   try {
@@ -298,6 +300,12 @@ export default async function initDevguard(
     environment,
     profileImport.configPatch,
   );
+  await applyProfileIdentityImport(
+    profileImport,
+    paths.stateDirectory,
+    environment,
+    options.profileImportDependencies,
+  );
   await applyProfileAuthImport(profileImport, options.profileImportDependencies);
   await writeProfileImportMarker(paths.projectStateRoot, profileImport, copyModelProfile);
 
@@ -316,11 +324,9 @@ export default async function initDevguard(
     });
   }
 
-  const isolatedEnvironment = {
-    ...environment,
-    OPENCLAW_STATE_DIR: paths.stateDirectory,
+  const isolatedEnvironment = isolatedOpenClawEnvironment(environment, paths.stateDirectory, {
     OPENCLAW_SKIP_CHANNELS: '1',
-  };
+  });
   if (config.plugin.id === 'openclaw-devguard') {
     await ensureLinkedPlugin(config.plugin.id, pluginRoot, isolatedEnvironment);
   } else {
