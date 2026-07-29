@@ -34,7 +34,7 @@ describe('cli/doctor', () => {
         auth: { mode: 'token', token: 'secret' },
         port: 19_001,
       },
-      tools: { exec: { mode: 'deny' }, elevated: { enabled: false } },
+      tools: { exec: { mode: 'full' }, elevated: { enabled: false } },
       agents: {
         defaults: { sandbox: { mode: 'off' } },
         list: [{ id: 'main', agentDir: join(paths.stateDirectory, 'agents/main/agent') }],

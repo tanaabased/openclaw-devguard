@@ -12,7 +12,7 @@ describe('cli/init configuration', () => {
         },
         list: [{ id: 'main', workspace: '/workspace', tools: { allow: ['exec'] } }],
       },
-      tools: { exec: { mode: 'allow' }, elevated: { enabled: true } },
+      tools: { exec: { mode: 'deny' }, elevated: { enabled: true } },
     }) as {
       agents: {
         defaults: { model: string; sandbox: { mode: string } };
@@ -26,7 +26,7 @@ describe('cli/init configuration', () => {
     assert.deepEqual(patch.agents.defaults.sandbox, { mode: 'off' });
     assert.equal(patch.agents.list.length, 1);
     assert.deepEqual(patch.tools, {
-      exec: { mode: 'deny' },
+      exec: { mode: 'full' },
       elevated: { enabled: false },
     });
     assert.deepEqual(patch.gateway, {

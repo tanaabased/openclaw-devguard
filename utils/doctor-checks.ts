@@ -62,7 +62,7 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
   const sandboxDisabled =
     nestedValue(stateConfig, ['agents', 'defaults', 'sandbox', 'mode']) === 'off';
   const elevatedDisabled = nestedValue(stateConfig, ['tools', 'elevated', 'enabled']) === false;
-  const execDenied = nestedValue(stateConfig, ['tools', 'exec', 'mode']) === 'deny';
+  const execReachesGuard = nestedValue(stateConfig, ['tools', 'exec', 'mode']) === 'full';
   const configuredAgents = nestedValue(stateConfig, ['agents', 'list']);
   const importedAgentIds = input.importedAgentIds ?? [];
   const agentStateIsolated =
@@ -109,7 +109,7 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
       'expected sandbox mode off',
     ),
     check('elevated-disabled', 'elevated disabled', elevatedDisabled),
-    check('exec-denied', 'exec denied', execDenied),
+    check('exec-pipeline-open', 'exec reaches guard', execReachesGuard, 'expected exec mode full'),
     check('gateway-reachable', 'gateway reachable', status !== undefined, input.gatewayError),
     check(
       'profile-active',

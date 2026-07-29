@@ -147,7 +147,7 @@ export function createIsolatedStatePatch(
       auth: { mode: 'token', token: gatewayToken },
       port,
     },
-    tools: { exec: { mode: 'deny' }, elevated: { enabled: false } },
+    tools: { exec: { mode: 'full' }, elevated: { enabled: false } },
     agents: {
       ...profileAgents,
       defaults: {

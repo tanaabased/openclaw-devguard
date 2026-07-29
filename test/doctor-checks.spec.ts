@@ -9,7 +9,7 @@ const stateConfig = {
     auth: { mode: 'token' },
     port: 19_001,
   },
-  tools: { exec: { mode: 'deny' }, elevated: { enabled: false } },
+  tools: { exec: { mode: 'full' }, elevated: { enabled: false } },
   agents: {
     defaults: { sandbox: { mode: 'off' } },
     list: [{ id: 'main', agentDir: '/devguard/state/agents/main/agent' }],
@@ -68,6 +68,7 @@ describe('utils/doctor-checks', () => {
     assert.ok(failed.has('agent-state-isolated'));
     assert.ok(failed.has('profile-isolated'));
     assert.ok(failed.has('sandbox-disabled'));
+    assert.ok(failed.has('exec-pipeline-open'));
     assert.ok(failed.has('gateway-reachable'));
     assert.ok(failed.has('guard-active'));
     assert.ok(failed.has('target-id'));
