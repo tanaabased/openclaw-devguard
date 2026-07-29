@@ -1,7 +1,4 @@
-import type {
-  AuthProfileCredential,
-  AuthProfileStore,
-} from 'openclaw/plugin-sdk/agent-runtime';
+import type { AuthProfileCredential, AuthProfileStore } from 'openclaw/plugin-sdk/agent-runtime';
 
 export interface AuthImportSelection {
   copiedByType: {
@@ -93,9 +90,7 @@ export function selectAuthProfiles(
       profiles,
       ...(Object.keys(order).length > 0 ? { order } : {}),
       ...(destination.lastGood ? { lastGood: structuredClone(destination.lastGood) } : {}),
-      ...(destination.usageStats
-        ? { usageStats: structuredClone(destination.usageStats) }
-        : {}),
+      ...(destination.usageStats ? { usageStats: structuredClone(destination.usageStats) } : {}),
     },
   };
 }

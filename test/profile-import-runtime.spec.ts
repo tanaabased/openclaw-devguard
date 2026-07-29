@@ -1,0 +1,221 @@
+import assert from 'node:assert/strict';
+
+import type { AuthProfileStore } from 'openclaw/plugin-sdk/agent-runtime';
+import type { OpenClawConfig } from 'openclaw/plugin-sdk/config-runtime';
+
+import {
+  applyProfileAuthImport,
+  emptyAuthProfileStore,
+  prepareProfileImport,
+  resolveProfileImport,
+} from '../lib/profile-import.ts';
+
+const sourceConfig: OpenClawConfig = {
+  agents: {
+    defaults: {
+      model: { primary: 'openai/model-main', fallbacks: ['other/model-fallback'] },
+      workspace: '/source/workspaces',
+      models: {
+        'openai/model-main': { alias: 'main-model' },
+        'other/model-fallback': { alias: 'fallback-model' },
+      },
+    },
+    list: [
+      { id: 'main', default: true, workspace: '/source/workspaces/main' },
+      { id: 'ops', workspace: '/source/workspaces/ops', model: 'openai/model-ops' },
+    ],
+  },
+  auth: {
+    profiles: {
+      'openai:default': { provider: 'openai', mode: 'api_key' },
+    },
+    order: { openai: ['openai:default'] },
+  },
+  models: {
+    mode: 'merge',
+    providers: {
+      openai: { baseUrl: 'https://example.invalid', models: [] },
+      other: { baseUrl: 'https://fallback.invalid', models: [] },
+    },
+  },
+};
+
+function authStore(profiles: AuthProfileStore['profiles']): AuthProfileStore {
+  return { version: 1, profiles };
+}
+
+describe('lib/profile-import', () => {
+  it('should resolve the default and requested agents into isolated runtime state', () => {
+    const prepared = prepareProfileImport({
+      agentIds: ['ops', 'ops'],
+      copyModelProfile: true,
+      destinationStateDirectory: '/isolated/state',
+      environment: { OPENCLAW_STATE_DIR: '/source/state' },
+      dependencies: {
+        loadSourceConfig: () => sourceConfig,
+        loadAuthStore: (agentDir) =>
+          agentDir.startsWith('/source/')
+            ? authStore({
+                'openai:default': {
+                  type: 'api_key',
+                  provider: 'openai',
+                  key: 'synthetic-key',
+                },
+              })
+            : emptyAuthProfileStore(),
+      },
+    });
+    const resolved = resolveProfileImport(prepared, false);
+    const patch = resolved.configPatch as OpenClawConfig;
+
+    assert.deepEqual(resolved.agentIds, ['main', 'ops']);
+    assert.deepEqual(resolved.modelRefs, [
+      'openai/model-main',
+      'other/model-fallback',
+      'openai/model-ops',
+    ]);
+    assert.deepEqual(
+      patch.agents?.list?.map((agent) => ({
+        id: agent.id,
+        workspace: agent.workspace,
+        agentDir: agent.agentDir,
+      })),
+      [
+        {
+          id: 'main',
+          workspace: '/source/workspaces/main',
+          agentDir: '/isolated/state/agents/main/agent',
+        },
+        {
+          id: 'ops',
+          workspace: '/source/workspaces/ops',
+          agentDir: '/isolated/state/agents/ops/agent',
+        },
+      ],
+    );
+    assert.equal(patch.agents?.list?.[0]?.tools, undefined);
+    assert.equal(patch.agents?.list?.[0]?.sandbox, undefined);
+    assert.deepEqual(Object.keys(patch.models?.providers ?? {}).sort(), ['openai', 'other']);
+    assert.equal(resolved.auth.copied, 2);
+  });
+
+  it('should reject unknown requested agents before resolving auth stores', () => {
+    let authLoads = 0;
+    assert.throws(
+      () =>
+        prepareProfileImport({
+          agentIds: ['missing'],
+          copyModelProfile: true,
+          destinationStateDirectory: '/isolated/state',
+          environment: { OPENCLAW_STATE_DIR: '/source/state' },
+          dependencies: {
+            loadSourceConfig: () => sourceConfig,
+            loadAuthStore: () => {
+              authLoads += 1;
+              return emptyAuthProfileStore();
+            },
+          },
+        }),
+      /Unknown OpenClaw agent id: missing/,
+    );
+    assert.equal(authLoads, 0);
+  });
+
+  it('should reject a destination that resolves to the source agent state', () => {
+    assert.throws(
+      () =>
+        prepareProfileImport({
+          copyModelProfile: false,
+          destinationStateDirectory: '/source/state',
+          environment: { OPENCLAW_STATE_DIR: '/source/state' },
+          dependencies: { loadSourceConfig: () => sourceConfig },
+        }),
+      /source and isolated agent state resolve to the same path: main/,
+    );
+  });
+
+  it('should import agent workspaces without model or auth state when disabled', () => {
+    const prepared = prepareProfileImport({
+      agentIds: ['ops'],
+      copyModelProfile: false,
+      destinationStateDirectory: '/isolated/state',
+      environment: { OPENCLAW_STATE_DIR: '/source/state' },
+      dependencies: { loadSourceConfig: () => sourceConfig },
+    });
+    const resolved = resolveProfileImport(prepared, false);
+    const patch = resolved.configPatch as OpenClawConfig;
+
+    assert.deepEqual(resolved.modelRefs, []);
+    assert.equal(resolved.agentAuth.length, 0);
+    assert.equal(patch.models, undefined);
+    assert.equal(patch.auth, undefined);
+    assert.equal(patch.agents?.list?.[0]?.model, undefined);
+  });
+
+  it('should request oauth consent only when no non-oauth route is available', () => {
+    const oauthConfig: OpenClawConfig = {
+      ...sourceConfig,
+      agents: { list: [{ id: 'main', default: true, model: 'openai/model-main' }] },
+      models: undefined,
+    };
+    const prepared = prepareProfileImport({
+      copyModelProfile: true,
+      destinationStateDirectory: '/isolated/state',
+      environment: { OPENCLAW_STATE_DIR: '/source/state' },
+      dependencies: {
+        loadSourceConfig: () => oauthConfig,
+        loadAuthStore: (agentDir) =>
+          agentDir.startsWith('/source/')
+            ? authStore({
+                'openai:oauth': {
+                  type: 'oauth',
+                  provider: 'openai',
+                  access: 'access-token',
+                  refresh: 'refresh-token',
+                  expires: Date.now() + 60_000,
+                },
+              })
+            : emptyAuthProfileStore(),
+      },
+    });
+
+    assert.deepEqual(prepared.oauthConsentProviders, ['openai']);
+    assert.equal(resolveProfileImport(prepared, true).auth.oauth, 1);
+  });
+
+  it('should save only auth stores that gained copied credentials', async () => {
+    const writes: Array<{ agentDir: string; profiles: string[] }> = [];
+    const prepared = prepareProfileImport({
+      copyModelProfile: true,
+      destinationStateDirectory: '/isolated/state',
+      environment: { OPENCLAW_STATE_DIR: '/source/state' },
+      dependencies: {
+        loadSourceConfig: () => sourceConfig,
+        loadAuthStore: (agentDir) =>
+          agentDir.startsWith('/source/')
+            ? authStore({
+                'openai:default': {
+                  type: 'api_key',
+                  provider: 'openai',
+                  key: 'synthetic-key',
+                },
+              })
+            : emptyAuthProfileStore(),
+      },
+    });
+
+    await applyProfileAuthImport(resolveProfileImport(prepared, false), {
+      ensureAgentDir: async () => undefined,
+      saveAuthStore: (store, agentDir) => {
+        writes.push({ agentDir, profiles: Object.keys(store.profiles) });
+      },
+    });
+
+    assert.deepEqual(writes, [
+      {
+        agentDir: '/isolated/state/agents/main/agent',
+        profiles: ['openai:default'],
+      },
+    ]);
+  });
+});
