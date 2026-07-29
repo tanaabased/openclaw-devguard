@@ -59,7 +59,7 @@ describe('lib/register-cli', () => {
     const devguard = findCommand(program, 'devguard');
     assert.deepEqual(
       new Set(devguard.children.map((command) => command.specification)),
-      new Set(['init [plugin-path]', 'run', 'tail', 'doctor', 'restore']),
+      new Set(['init [plugin-path]', 'profile [plugin-path]', 'run', 'tail', 'doctor', 'restore']),
     );
     assert.deepEqual(
       new Set(findCommand(devguard, 'init [plugin-path]').options),
@@ -95,7 +95,7 @@ describe('lib/register-cli', () => {
     registerDevguardCli(program, { logger });
     const devguard = findCommand(program, 'devguard');
 
-    for (const specification of ['doctor', 'restore']) {
+    for (const specification of ['profile [plugin-path]', 'doctor', 'restore']) {
       const command = findCommand(devguard, specification);
       assert.equal(typeof command.handler, 'function');
     }

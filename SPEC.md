@@ -116,7 +116,7 @@ openclaw devguard init ./path/to/plugin
 
 Responsibilities:
 
-- select or create stable project-specific OpenClaw state
+- select or create a stable project-specific native OpenClaw profile
 - ensure state is separate from the normal OpenClaw profile
 - resolve the source profile's default agent and optional repeated `--agent` selections
 - retain source workspaces while assigning isolated agent directories and empty sessions
@@ -138,6 +138,18 @@ Responsibilities:
 - produce a concise summary of the resolved target, state, log, and next action
 
 The command must be idempotent.
+
+### `openclaw devguard profile`
+
+Prints the initialized target's native OpenClaw profile name for use with ordinary OpenClaw commands.
+
+Example:
+
+```bash
+openclaw --profile "$(openclaw devguard profile)" agents list
+```
+
+The command must emit only the profile name to standard output, accept an optional plugin path, and fail when the target has not been initialized or its marker does not match the resolved native profile.
 
 ### `openclaw devguard run`
 
@@ -217,6 +229,7 @@ openclaw devguard doctor
 In default `deny` mode, checks should include:
 
 - the expected project-specific isolated state is active
+- the live Gateway reports the expected native profile name
 - the normal production profile is not being mutated
 - ambient channels are disabled
 - OpenClaw Docker sandboxing is disabled

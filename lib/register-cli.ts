@@ -1,5 +1,6 @@
 import doctorDevguard from '../cli/doctor.ts';
 import initDevguard from '../cli/init.ts';
+import profileDevguard from '../cli/profile.ts';
 import restoreDevguard from '../cli/restore.ts';
 import runDevguard from '../cli/run.ts';
 import tailDevguard from '../cli/tail.ts';
@@ -85,6 +86,15 @@ export default function registerDevguardCli(
           output,
           pluginRoot: options.pluginRoot,
         });
+      });
+    });
+
+  devguard
+    .command('profile [plugin-path]')
+    .description('Print the isolated OpenClaw profile name.')
+    .action(async (pluginPath: unknown) => {
+      await runCliAction(options.logger, 'profile lookup failed', async () => {
+        await profileDevguard(typeof pluginPath === 'string' ? pluginPath : '.', { output });
       });
     });
 

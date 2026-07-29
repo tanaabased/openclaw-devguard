@@ -11,7 +11,9 @@ normal profile: DevGuard CLI
         |
 target repository: devguard.json and source
         |
-isolated profile: DevGuard + linked target + owned Gateway + logs
+native isolated profile: DevGuard + linked target + owned Gateway
+        |
+DevGuard metadata: marker + token + snapshot + logs
 ```
 
 Initialize the target repository, not the DevGuard repository:
@@ -29,7 +31,8 @@ Running those commands from the DevGuard repository is the supported dogfooding 
 The target must contain `package.json`, `openclaw.plugin.json`, and a `build` or `plugin:build` package script. When present, `plugin:check`, `plugin:validate`, or `validate` becomes the post-build validation command. `init` then:
 
 - creates or validates `devguard.json`
-- creates stable project-specific state under `~/.openclaw-dev/devguard/projects/`
+- creates a stable native profile under `~/.openclaw-devguard-<plugin>-<hash>/`
+- keeps its marker, token, snapshot, and logs under `~/.openclaw-dev/devguard/projects/`
 - snapshots pre-existing isolated configuration once
 - imports the source default agent, effective model selection, and portable authentication
 - resolves additional `--agent` selections from the source profile
@@ -68,7 +71,7 @@ The generated configuration is deliberately strict:
 }
 ```
 
-Change `build`, `validate`, `watch`, or `gateway.port` when the inferred defaults do not fit. The schema rejects unknown keys. Use different ports when supervising multiple targets concurrently. Set `DEVGUARD_HOME` to move the parent directory for project state.
+Change `build`, `validate`, `watch`, or `gateway.port` when the inferred defaults do not fit. The schema rejects unknown keys. Use different ports when supervising multiple targets concurrently. Set `DEVGUARD_HOME` to move DevGuard's metadata and logs; native OpenClaw profile locations continue to follow OpenClaw's home-directory convention.
 
 DevGuard explicitly sets `agents.defaults.sandbox.mode` to `off`. It does not require, build, or manage OpenClaw Docker sandbox images, and workflows that require OpenClaw's Docker sandbox are not currently supported. It also sets `tools.exec.mode` to `full` because OpenClaw's Codex app-server model transport cannot run under `deny` or `allowlist`. This does not make DevGuard's policy mode permissive: the exec request reaches the hook pipeline, DevGuard records it, target pre-tool hooks can observe it, and DevGuard's terminal deny hook blocks it. `run` and `doctor` refuse readiness unless that live hook is active. Target plugin code remains developer-controlled and runs in the Gateway process.
 
@@ -128,15 +131,15 @@ Raw streams may contain prompts and secrets. Use that option only for deliberate
 
 ## Use The Isolated Gateway
 
-`init` prints the resolved state directory. Point another terminal at it when inspecting or exercising the target:
+Ask DevGuard for the native profile name when inspecting the target or sending it a message from another terminal:
 
 ```sh
-export OPENCLAW_STATE_DIR="/path/printed/by/devguard/state"
-openclaw plugins inspect my-plugin --runtime --json
-openclaw agent --session-key devguard-smoke --message "Call an available tool" --json
+DEVGUARD_PROFILE="$(openclaw devguard profile)"
+openclaw --profile "$DEVGUARD_PROFILE" plugins inspect my-plugin --runtime --json
+openclaw --profile "$DEVGUARD_PROFILE" agent --session-key devguard-smoke --message "Call an available tool" --json
 ```
 
-The isolated profile imports only the model and agent surface described above; it does not copy general OpenClaw configuration. Ambient channels remain disabled by design.
+`profile` writes only the scriptable profile name to standard output and accepts an optional target-plugin path. The isolated profile imports only the model and agent surface described above; it does not copy general OpenClaw configuration. Ambient channels remain disabled by design.
 
 ## Logging And Deny Policy
 
@@ -175,6 +178,7 @@ openclaw devguard tail --json --no-follow
 | Command                                                | Behavior                                                      |
 | ------------------------------------------------------ | ------------------------------------------------------------- |
 | `openclaw devguard init [plugin-path] [options]`       | Import a source profile, initialize, build, validate, inspect |
+| `openclaw devguard profile [plugin-path]`              | Print the initialized native profile name                     |
 | `openclaw devguard run [--once] [--unsafe-raw-stream]` | Supervise and verify the target                               |
 | `openclaw devguard tail [--json] [--no-follow]`        | Follow or read current audit records                          |
 | `openclaw devguard doctor`                             | Aggregate configuration, live runtime, and OpenClaw checks    |
@@ -188,7 +192,7 @@ openclaw devguard tail --json --no-follow
 | `--no-model-profile` | Skip source model configuration and authentication            |
 | `--copy-oauth`       | Explicitly copy otherwise non-portable refreshable OAuth data |
 
-Run `doctor` while the supervised Gateway is live. It reports every check rather than stopping at the first failure, including imported agent state, isolation, channel, sandbox, tool-policy, target identity, live build, runtime inspection, and OpenClaw plugin diagnostics.
+Run `doctor` while the supervised Gateway is live. It reports every check rather than stopping at the first failure, including native profile selection, imported agent state, isolation, channel, sandbox, tool-policy, target identity, live build, runtime inspection, and OpenClaw plugin diagnostics.
 
 ```sh
 openclaw devguard doctor

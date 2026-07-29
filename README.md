@@ -22,7 +22,7 @@ OpenClaw DevGuard is a third-party development plugin that builds another OpenCl
 
 DevGuard:
 
-- creates project-specific OpenClaw state outside the normal profile
+- creates a stable project-specific native OpenClaw profile
 - links, builds, and watches a target plugin
 - validates each successful build before replacement
 - restarts its owned Gateway only after a successful build
