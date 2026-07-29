@@ -39,6 +39,9 @@ jobs:
       - name: Put Homebrew on PATH
         shell: bash
         run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+      - name: Refresh Homebrew when needed
+        shell: bash
+        run: HOMEBREW_NO_AUTO_UPDATE= brew update-if-needed
       - name: Install Homebrew dependencies
         shell: bash
         run: |
