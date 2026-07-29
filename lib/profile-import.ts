@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import {
   DEFAULT_PROVIDER,
@@ -214,6 +214,16 @@ function profileConfigPatch(
 
 export function prepareProfileImport(options: PrepareProfileImportOptions): PreparedProfileImport {
   const dependencies = options.dependencies ?? {};
+  const sourceStateDirectory = options.environment.OPENCLAW_STATE_DIR;
+  const sourceConfigPath = options.environment.OPENCLAW_CONFIG_PATH;
+  if (
+    (sourceStateDirectory &&
+      resolve(sourceStateDirectory) === resolve(options.destinationStateDirectory)) ||
+    (sourceConfigPath &&
+      resolve(dirname(sourceConfigPath)) === resolve(options.destinationStateDirectory))
+  ) {
+    throw new Error('DevGuard source and isolated profile state resolve to the same path');
+  }
   const sourceConfig = (dependencies.loadSourceConfig ?? loadConfig)();
   const loadAuthStore = dependencies.loadAuthStore ?? defaultLoadAuthStore;
   const defaultAgentId = resolveDefaultAgentId(sourceConfig);

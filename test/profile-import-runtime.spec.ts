@@ -126,11 +126,44 @@ describe('lib/profile-import', () => {
       () =>
         prepareProfileImport({
           copyModelProfile: false,
-          destinationStateDirectory: '/source/state',
+          destinationStateDirectory: '/isolated/state',
           environment: { OPENCLAW_STATE_DIR: '/source/state' },
-          dependencies: { loadSourceConfig: () => sourceConfig },
+          dependencies: {
+            loadSourceConfig: () => ({
+              ...sourceConfig,
+              agents: {
+                ...sourceConfig.agents,
+                list: [
+                  {
+                    id: 'main',
+                    default: true,
+                    agentDir: '/isolated/state/agents/main/agent',
+                  },
+                ],
+              },
+            }),
+          },
         }),
       /source and isolated agent state resolve to the same path: main/,
+    );
+  });
+
+  it('should reject the source state before accepting an external source agent directory', () => {
+    assert.throws(
+      () =>
+        prepareProfileImport({
+          copyModelProfile: false,
+          destinationStateDirectory: '/isolated/state',
+          environment: { OPENCLAW_STATE_DIR: '/isolated/state' },
+          dependencies: {
+            loadSourceConfig: () => ({
+              agents: {
+                list: [{ id: 'main', default: true, agentDir: '/external/main/agent' }],
+              },
+            }),
+          },
+        }),
+      /source and isolated profile state resolve to the same path/,
     );
   });
 
