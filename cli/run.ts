@@ -110,6 +110,7 @@ export default async function runDevguard(
         DEVGUARD_BUILD_ID: buildId,
         DEVGUARD_LOG_PATH: paths.logPath,
         DEVGUARD_TARGET_PLUGIN_ID: config.plugin.id,
+        DEVGUARD_POLICY_MODE: config.policy.mode,
         DEVGUARD_ENV_PREVIEW_ALLOWLIST: config.logging.environmentValueAllowlist.join(','),
       },
     );
@@ -190,6 +191,7 @@ export default async function runDevguard(
       });
       void waitForGatewayStatus({
         expectedBuildId,
+        expectedPolicyMode: config.policy.mode,
         expectedProfileName: paths.profileName,
         expectedStateDirectory: paths.stateDirectory,
         isCurrent: () => activeGatewayBuildId === expectedBuildId,

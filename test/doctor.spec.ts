@@ -15,6 +15,7 @@ const config = {
     build: { command: 'bun', args: ['run', 'build'] },
     watch: ['index.ts'],
   },
+  policy: { mode: 'probe' },
   logging: { environmentValueAllowlist: [] },
   gateway: { port: 19_001 },
 };
@@ -36,7 +37,7 @@ describe('cli/doctor', () => {
         auth: { mode: 'token', token: 'secret' },
         port: 19_001,
       },
-      tools: { exec: { mode: 'full' }, elevated: { enabled: false } },
+      tools: { exec: { host: 'gateway', mode: 'full' }, elevated: { enabled: false } },
       agents: {
         defaults: { sandbox: { mode: 'off' } },
         list: [{ id: 'main', agentDir: join(paths.stateDirectory, 'agents/main/agent') }],
@@ -83,7 +84,7 @@ describe('cli/doctor', () => {
             hookRegistered: true,
             pluginBuildId: 'build-1',
             pluginId: 'example-plugin',
-            policyMode: 'deny',
+            policyMode: 'probe',
             profileName: paths.profileName,
             stateDirectory: paths.stateDirectory,
           };

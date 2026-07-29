@@ -32,7 +32,7 @@ describe('cli/init configuration', () => {
         list: Array<{ default?: boolean; id: string }>;
       };
       gateway: { auth: { token: string }; bind: string; mode: string; port: number };
-      tools: { elevated: { enabled: boolean }; exec: { mode: string } };
+      tools: { elevated: { enabled: boolean }; exec: { host: string; mode: string } };
       ui: { assistant: { avatar: string; name: string } };
     };
 
@@ -46,7 +46,7 @@ describe('cli/init configuration', () => {
       ],
     );
     assert.deepEqual(patch.tools, {
-      exec: { mode: 'full' },
+      exec: { host: 'gateway', mode: 'full' },
       elevated: { enabled: false },
     });
     assert.deepEqual(patch.gateway, {

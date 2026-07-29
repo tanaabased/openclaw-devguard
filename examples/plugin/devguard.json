@@ -1,7 +1,7 @@
 {
   "version": 1,
   "plugin": {
-    "id": "openclaw-devguard",
+    "id": "devguard-example",
     "build": {
       "command": "bun",
       "args": ["run", "build"]
@@ -10,22 +10,13 @@
       "command": "bun",
       "args": ["run", "plugin:check"]
     },
-    "watch": [
-      "cli",
-      "lib",
-      "scripts",
-      "utils",
-      "index.ts",
-      "openclaw.plugin.json",
-      "package.json",
-      "tsconfig.json"
-    ]
+    "watch": ["index.mjs", "openclaw.plugin.json", "package.json"]
   },
   "policy": {
     "mode": "probe"
   },
   "logging": {
-    "environmentValueAllowlist": []
+    "environmentValueAllowlist": ["DEVGUARD_EXAMPLE_EXEC_ENV"]
   },
   "gateway": {
     "port": 19001

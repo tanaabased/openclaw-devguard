@@ -13,6 +13,7 @@ const config = {
     build: { command: 'bun', args: ['run', 'build'] },
     watch: ['index.ts'],
   },
+  policy: { mode: 'probe' },
   logging: { environmentValueAllowlist: [] },
   gateway: { port: 19_001 },
 };

@@ -3,16 +3,17 @@
 ## Scope
 
 - Keep implementation in its nearest owning scope: plugin registration in `index.ts`, one implementation file per OpenClaw subcommand in `cli/`, CLI registration and reusable orchestration in `lib/`, pure helpers in `utils/`, and development tasks in `scripts/`.
-- Keep shared Leia target projects in `fixtures/`, shared executable Leia drivers in `scripts/`, and only matrix-backed scenario directories plus required boundary files in `examples/`.
+- Keep only matrix-backed scenario directories plus required boundary files in `examples/`. Keep scenario-owned static assets beside their example and hoist fixtures only after two or more examples genuinely share them.
+- Keep Leia intent and assertions visible in each example README through public commands, direct shell checks, and already-generated product logs. Do not hide scenario expectations in repository-specific assertion helpers; add shared process coordination only when a readable, reliable cross-platform shell boundary cannot express it.
 - Keep tests flat in `test/` and name specs after the behavior they own.
 - Treat `SPEC.md` as product intent, not evidence that a feature has been implemented.
 
 ## Product boundary
 
 - Treat agent-requested tool activity as untrusted and target plugin code as developer-controlled. Keep DevGuard focused on supervising developer-controlled OpenClaw plugin workflows through public OpenClaw lifecycle, inspection, diagnostic, and tool-policy APIs.
-- DevGuard may capture, deny, request native OpenClaw approval for, or explicitly pass through real tool calls. Deny must remain the default; approval and allow behavior must be explicit, auditable, visibly surfaced, and fail closed when configuration, approval routing, or audit logging fails.
+- DevGuard may capture, probe, deny, request native OpenClaw approval for, or explicitly pass through real tool calls. Probe is the default for supported tools, unsupported and unknown tools must deny, and approval and allow behavior must be explicit, auditable, visibly surfaced, and fail closed when configuration, approval routing, or audit logging fails.
 - Keep the OpenClaw exec layer permissive enough for model transport and tool requests to reach DevGuard's hooks. Do not use `tools.exec.mode` as the deny-mode enforcement boundary.
-- Do not expand DevGuard into an arbitrary-code isolation or simulation platform. Container or VM orchestration, direct Node.js API interception, synthetic tool success, command simulation, fixture or replay engines, production policy enforcement, and remote or multi-user runtime management are out of scope unless the project is explicitly rechartered.
+- DevGuard may replace selected built-in tool execution with a narrow non-mutating recorder when it preserves the public OpenClaw hook lifecycle and truthfully reports that the original operation did not run. Do not expand this into semantic command simulation, synthetic state, fixture or replay engines, arbitrary-code isolation, container or VM orchestration, direct Node.js API interception, production policy enforcement, or remote or multi-user runtime management unless the project is explicitly rechartered.
 - Keep OpenClaw Docker sandboxing disabled in generated profiles and operational tests. DevGuard must not require, build, or manage container images as part of its safety model.
 - Prefer real OpenClaw execution outcomes and clearly stated limitations over fake success, permissive fallbacks, or partial isolation claims.
 

@@ -9,7 +9,7 @@ const stateConfig = {
     auth: { mode: 'token' },
     port: 19_001,
   },
-  tools: { exec: { mode: 'full' }, elevated: { enabled: false } },
+  tools: { exec: { host: 'gateway', mode: 'full' }, elevated: { enabled: false } },
   agents: {
     defaults: { sandbox: { mode: 'off' } },
     list: [{ id: 'main', agentDir: '/devguard/state/agents/main/agent' }],
@@ -17,9 +17,10 @@ const stateConfig = {
 };
 
 describe('utils/doctor-checks', () => {
-  it('should accept a fully isolated current deny-mode environment', () => {
+  it('should accept a fully isolated current probe-mode environment', () => {
     const checks = doctorChecks({
       expectedPluginId: 'example-plugin',
+      expectedPolicyMode: 'probe',
       expectedPort: 19_001,
       expectedProfileName: 'devguard-example',
       expectedStateDirectory: '/devguard/state',
@@ -29,7 +30,7 @@ describe('utils/doctor-checks', () => {
         hookRegistered: true,
         pluginBuildId: 'build-1',
         pluginId: 'example-plugin',
-        policyMode: 'deny',
+        policyMode: 'probe',
         profileName: 'devguard-example',
         stateDirectory: '/devguard/state',
       },
@@ -53,6 +54,7 @@ describe('utils/doctor-checks', () => {
   it('should report independent safety and runtime failures together', () => {
     const checks = doctorChecks({
       expectedPluginId: 'example-plugin',
+      expectedPolicyMode: 'probe',
       expectedPort: 19_001,
       expectedProfileName: 'devguard-example',
       expectedStateDirectory: '/normal/state',

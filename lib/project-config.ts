@@ -7,6 +7,8 @@ import { resolveRequiredHomeDir } from 'openclaw/plugin-sdk/state-paths';
 
 export const DEVGUARD_PROJECT_FILE = 'devguard.json';
 
+export type DevguardPolicyMode = 'deny' | 'probe';
+
 export interface DevguardProjectConfig {
   version: 1;
   plugin: {
@@ -20,6 +22,9 @@ export interface DevguardProjectConfig {
       args: string[];
     };
     watch: string[];
+  };
+  policy: {
+    mode: DevguardPolicyMode;
   };
   logging: {
     environmentValueAllowlist: string[];
@@ -84,7 +89,11 @@ function commandConfig(value: unknown, path: string): DevguardProjectConfig['plu
 
 export function parseProjectConfig(value: unknown): DevguardProjectConfig {
   const config = record(value, DEVGUARD_PROJECT_FILE);
-  assertExactKeys(config, ['version', 'plugin', 'logging', 'gateway'], DEVGUARD_PROJECT_FILE);
+  assertExactKeys(
+    config,
+    ['version', 'plugin', 'policy', 'logging', 'gateway'],
+    DEVGUARD_PROJECT_FILE,
+  );
   if (config.version !== 1) throw new Error(`${DEVGUARD_PROJECT_FILE} version must be 1`);
 
   const plugin = record(config.plugin, 'plugin');
@@ -95,6 +104,12 @@ export function parseProjectConfig(value: unknown): DevguardProjectConfig {
   const build = commandConfig(plugin.build, 'plugin.build');
   const validate =
     plugin.validate === undefined ? undefined : commandConfig(plugin.validate, 'plugin.validate');
+
+  const policy = config.policy === undefined ? { mode: 'probe' } : record(config.policy, 'policy');
+  assertExactKeys(policy, ['mode'], 'policy');
+  if (policy.mode !== 'deny' && policy.mode !== 'probe') {
+    throw new TypeError('policy.mode must be "deny" or "probe"');
+  }
 
   const logging = record(config.logging, 'logging');
   assertExactKeys(logging, ['environmentValueAllowlist'], 'logging');
@@ -117,6 +132,7 @@ export function parseProjectConfig(value: unknown): DevguardProjectConfig {
       ...(validate ? { validate } : {}),
       watch: stringArray(plugin.watch, 'plugin.watch'),
     },
+    policy: { mode: policy.mode },
     logging: {
       environmentValueAllowlist: stringArray(
         logging.environmentValueAllowlist,
@@ -227,6 +243,7 @@ export async function createProjectConfig(pluginRoot: string): Promise<DevguardP
       ...(validate ? { validate } : {}),
       watch: await inferWatchPaths(pluginRoot),
     },
+    policy: { mode: 'probe' },
     logging: { environmentValueAllowlist: [] },
     gateway: { port: 19_001 },
   };

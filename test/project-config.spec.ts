@@ -18,6 +18,7 @@ const validConfig = {
     validate: { command: 'bun', args: ['run', 'plugin:check'] },
     watch: ['src', 'package.json'],
   },
+  policy: { mode: 'probe' },
   logging: { environmentValueAllowlist: ['NODE_ENV'] },
   gateway: { port: 19_001 },
 };
@@ -25,6 +26,12 @@ const validConfig = {
 describe('lib/project-config', () => {
   it('should parse the strict project configuration', () => {
     assert.deepEqual(parseProjectConfig(validConfig), validConfig);
+  });
+
+  it('should apply probe mode to an older configuration without a policy section', () => {
+    const legacyConfig: Record<string, unknown> = { ...validConfig };
+    delete legacyConfig.policy;
+    assert.equal(parseProjectConfig(legacyConfig).policy.mode, 'probe');
   });
 
   it('should reject unknown keys instead of assuming permissive defaults', () => {
@@ -89,6 +96,7 @@ describe('lib/project-config', () => {
         args: ['run', 'plugin:check'],
       });
       assert.deepEqual(config.plugin.watch, ['index.mjs', 'openclaw.plugin.json', 'package.json']);
+      assert.equal(config.policy.mode, 'probe');
     } finally {
       await rm(root, { force: true, recursive: true });
     }

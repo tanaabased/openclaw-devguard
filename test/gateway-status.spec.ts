@@ -23,7 +23,7 @@ function statusResult(pluginBuildId: string): GatewayStatus {
     denyUnknownTools: true,
     pluginBuildId,
     hookRegistered: true,
-    policyMode: 'deny',
+    policyMode: 'probe',
   };
 }
 
@@ -119,6 +119,19 @@ describe('lib/gateway-status', () => {
         timeoutMs: 1_000,
       }),
       /DevGuard hook/,
+    );
+  });
+
+  it('should reject a matching build with the wrong policy mode', async () => {
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        expectedPolicyMode: 'deny',
+        isCurrent: () => true,
+        queryStatus: () => Promise.resolve(statusResult('build-1')),
+        timeoutMs: 1_000,
+      }),
+      /deny mode/,
     );
   });
 

@@ -1,16 +1,22 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 
 import { DEVGUARD_MANAGED_RUNTIME_ENV } from './lib/dev-runner.ts';
 import { logDebug, logInfo, reportError } from './lib/logger.ts';
-import createToolGuard, { TOOL_CAPTURE_PRIORITY, TOOL_GUARD_PRIORITY } from './lib/tool-guard.ts';
+import createToolGuard, {
+  TOOL_CAPTURE_PRIORITY,
+  TOOL_GUARD_PRIORITY,
+  type ToolPolicyMode,
+} from './lib/tool-guard.ts';
 import registerDevguardCli from './lib/register-cli.ts';
 
 function runtimeSettings(): {
   logPath: string;
   environmentValueAllowlist: string[];
+  policyMode: ToolPolicyMode;
 } {
   const stateDirectory =
     process.env.OPENCLAW_STATE_DIR ?? join(homedir(), '.openclaw-dev', 'devguard');
@@ -18,11 +24,15 @@ function runtimeSettings(): {
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean);
+  const configuredPolicy = process.env.DEVGUARD_POLICY_MODE;
+  const policyMode =
+    configuredPolicy === undefined || configuredPolicy === 'probe' ? 'probe' : 'deny';
 
   return {
     logPath:
       process.env.DEVGUARD_LOG_PATH ?? join(stateDirectory, 'devguard', 'logs', 'events.jsonl'),
     environmentValueAllowlist: [...new Set(environmentAllowlist)],
+    policyMode,
   };
 }
 
@@ -59,6 +69,9 @@ export default definePluginEntry({
       pluginId: targetPluginId,
       buildId,
       logPath: settings.logPath,
+      policyMode: settings.policyMode,
+      probeExecutablePath: process.execPath,
+      probeScriptPath: fileURLToPath(new URL('./exec-probe-task.js', import.meta.url)),
       environmentValueAllowlist: settings.environmentValueAllowlist,
       onLogError(error) {
         reportError(api.logger, 'failed to append the tool-call audit log', error);
@@ -66,10 +79,12 @@ export default definePluginEntry({
     });
 
     api.on('before_tool_call', guard.captureToolCall, { priority: TOOL_CAPTURE_PRIORITY });
-    api.on('before_tool_call', guard.blockToolCall, { priority: TOOL_GUARD_PRIORITY });
+    api.on('before_tool_call', guard.applyToolPolicy, { priority: TOOL_GUARD_PRIORITY });
+    api.on('after_tool_call', guard.recordToolResult);
+    api.on('before_prompt_build', guard.buildPromptContext);
     logInfo(
       api.logger,
-      `tool capture and deny policy registered with priorities ${TOOL_CAPTURE_PRIORITY}/${TOOL_GUARD_PRIORITY}`,
+      `tool capture and ${settings.policyMode} policy registered with priorities ${TOOL_CAPTURE_PRIORITY}/${TOOL_GUARD_PRIORITY}`,
     );
     logDebug(api.logger, `audit log configured at ${settings.logPath}`);
     api.registerGatewayMethod('devguard.status', ({ respond }) => {

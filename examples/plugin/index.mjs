@@ -9,6 +9,8 @@ export default definePluginEntry({
   name: 'DevGuard example plugin',
   description: 'Deterministic target plugin for DevGuard Leia scenarios.',
   register(api) {
+    api.on('resolve_exec_env', () => ({ DEVGUARD_EXAMPLE_EXEC_ENV: 'positronic' }));
+
     api.registerGatewayMethod('devguard-example.attempt-tool', async ({ params, respond }) => {
       const toolName = typeof params.toolName === 'string' ? params.toolName : 'unknown';
       const sentinelPath = join(process.env.TMPDIR ?? '.', `${toolName}-sentinel`);

@@ -44,7 +44,20 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 unset OPENAI_API_KEY
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-text "$(cat "$TMPDIR/log-path")" '"event":"target_plugin_loaded"' 1 90 "$(cat "$TMPDIR/run.pid")"
+log_path="$(cat "$TMPDIR/log-path")"
+run_pid="$(cat "$TMPDIR/run.pid")"
+deadline=$((SECONDS + 90))
+until grep -Fq '"event":"target_plugin_loaded"' "$log_path" 2>/dev/null; do
+  if ! kill -0 "$run_pid" 2>/dev/null; then
+    tail -n 120 "$TMPDIR/run.log"
+    exit 1
+  fi
+  if ((SECONDS >= deadline)); then
+    tail -n 120 "$TMPDIR/run.log"
+    exit 1
+  fi
+  sleep 1
+done
 ```
 
 ## Testing
@@ -71,7 +84,12 @@ openclaw devguard exec -- agent --session-key devguard-model-live --message "Rep
 ```bash
 # should stop live supervision
 if kill -0 "$(cat "$TMPDIR/run.pid")" 2>/dev/null; then
-  kill -TERM "$(cat "$TMPDIR/run.pid")"
-  node "$GITHUB_WORKSPACE/scripts/leia-check-cli.mjs" wait-exit "$(cat "$TMPDIR/run.pid")" 20
+  run_pid="$(cat "$TMPDIR/run.pid")"
+  kill -TERM "$run_pid"
+  deadline=$((SECONDS + 20))
+  while kill -0 "$run_pid" 2>/dev/null; do
+    if ((SECONDS >= deadline)); then exit 1; fi
+    sleep 1
+  done
 fi
 ```

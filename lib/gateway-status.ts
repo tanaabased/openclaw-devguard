@@ -36,6 +36,7 @@ export interface WaitForGatewayStatusOptions {
   delay?: (milliseconds: number) => Promise<void>;
   expectedBuildId: string;
   expectedProfileName?: string;
+  expectedPolicyMode?: string;
   expectedStateDirectory?: string;
   isCurrent: () => boolean;
   now?: () => number;
@@ -55,8 +56,9 @@ function validateReadyStatus(status: GatewayStatus, options: WaitForGatewayStatu
   if (status.hookRegistered !== true) {
     throw new Error('Gateway did not register the DevGuard hook');
   }
-  if (status.policyMode !== 'deny') {
-    throw new Error('Gateway is not using DevGuard deny mode');
+  const expectedPolicyMode = options.expectedPolicyMode ?? 'probe';
+  if (status.policyMode !== expectedPolicyMode) {
+    throw new Error(`Gateway is not using DevGuard ${expectedPolicyMode} mode`);
   }
   if (status.denyUnknownTools !== true) {
     throw new Error('Gateway is not denying unknown tools');

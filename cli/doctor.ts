@@ -255,6 +255,7 @@ export default async function doctorDevguard(
   const manifestValue = manifest.value as { id?: unknown } | undefined;
   const checks = doctorChecks({
     expectedPluginId: config.plugin.id,
+    expectedPolicyMode: config.policy.mode,
     expectedPort: config.gateway.port,
     expectedProfileName: paths.profileName,
     expectedStateDirectory: paths.stateDirectory,

@@ -300,9 +300,11 @@ DevGuard commands must be reliable automation boundaries as well as readable int
 ## Tool Policy
 
 DevGuard should register a high-priority non-terminal `before_tool_call` capture hook and a
-low-priority policy hook so target-plugin pre-execution hooks can run between them. In `deny`
-mode, the policy hook should terminally block the call. In `approve` and `allow` modes, it should
-apply the corresponding policy without manufacturing a result.
+low-priority policy hook so target-plugin pre-execution hooks can run between them. In `probe`
+mode, supported calls should be replaced with a narrow non-mutating recorder and unsupported
+calls should be denied. In `deny` mode, the policy hook should terminally block the call. In
+`approve` and `allow` modes, it should apply the corresponding policy without manufacturing a
+result.
 
 Default policy:
 
@@ -310,7 +312,7 @@ Default policy:
 | -------------------------------------- | -------------- |
 | Pure inspection or read-only tools     | Block and log  |
 | Filesystem mutation                    | Block and log  |
-| `exec` and process execution           | Block and log  |
+| `exec` and process execution           | Probe and log  |
 | Network and external services          | Block and log  |
 | Browser and computer control           | Block and log  |
 | Messaging                              | Block and log  |
@@ -319,11 +321,22 @@ Default policy:
 
 ### Modes
 
-DevGuard's policy vocabulary is `deny`, `approve`, and `allow`. `deny` is the implemented and required default. `approve` and `allow` are path-to-`1.0.0` features and must not be inferred from missing, unknown, or malformed configuration.
+DevGuard's policy vocabulary is `probe`, `deny`, `approve`, and `allow`. `probe` is the implemented and required default. `approve` and `allow` are path-to-`1.0.0` features and must not be inferred from missing, unknown, or malformed configuration.
+
+#### `probe`
+
+Default mode.
+
+- record and redact the attempted call
+- let target-plugin pre-execution and exec-environment hooks run
+- replace supported execution with a fixed DevGuard recorder that cannot invoke the original operation
+- record the selected environment observations and the real recorder result
+- tell the agent that the original operation did not run and no original side effects occurred
+- deny tools without an implemented non-mutating probe
 
 #### `deny`
 
-Default mode.
+Explicit terminal-denial mode.
 
 - record the attempted call
 - redact sensitive values
@@ -364,26 +377,27 @@ openclaw devguard run --mode allow
 
 ### Shared mode invariants
 
-- `deny` remains the default.
-- Unknown or malformed policy configuration resolves to `deny`.
-- Every mode uses real OpenClaw tool outcomes; no mode fabricates success.
+- `probe` remains the default when policy is omitted.
+- Unknown or malformed policy configuration fails closed rather than selecting a permissive mode.
+- Every mode reports the real OpenClaw outcome; probe results must say that the original operation did not run.
 - `approve` and `allow` may cause real side effects and must say so clearly.
 - OpenClaw's base exec policy must not preempt DevGuard's capture and terminal policy hooks.
 - Mode-specific OpenClaw configuration must be internally consistent. DevGuard may not report that a call is approved or allowed while its own generated profile silently denies the same capability.
 
-## Important Limitation: No Synthetic Tool Success
+## Important Limitation: No False Tool Success
 
 The normal OpenClaw `before_tool_call` hook can inspect, rewrite, approve, or block a call, but it cannot return an arbitrary synthetic successful tool result.
 
-Therefore, DevGuard cannot transparently make the model believe that a blocked operation succeeded.
+Therefore, DevGuard cannot transparently make the model believe that a blocked operation succeeded. Probe mode may execute a fixed recorder in place of a supported operation, but its result must explicitly distinguish the recorder's success from execution of the original request.
 
 Example behavior:
 
 ```text
 Agent requests exec
 → DevGuard records the command
-→ DevGuard blocks the call
-→ Agent receives a policy error
+→ target-plugin hooks resolve the exec environment
+→ DevGuard replaces the command with its recorder
+→ Agent receives a probe result stating that the original command did not run
 ```
 
 Not:
@@ -391,11 +405,11 @@ Not:
 ```text
 Agent requests exec
 → DevGuard records the command
-→ DevGuard returns a fake successful result
-→ Agent continues as though the command ran
+→ DevGuard returns a fake result for the original command
+→ Agent continues as though the original side effects occurred
 ```
 
-Synthetic success is outside the product boundary even if OpenClaw later exposes such a seam.
+Synthetic success and semantic simulation remain outside the product boundary even if OpenClaw later exposes such a seam.
 
 ## Logging
 
@@ -542,6 +556,9 @@ Example:
     },
     "watch": ["src", "openclaw.plugin.json", "package.json"]
   },
+  "policy": {
+    "mode": "probe"
+  },
   "logging": {
     "environmentValueAllowlist": []
   },
@@ -551,7 +568,7 @@ Example:
 }
 ```
 
-Configuration uses strict schema validation and rejects unknown keys by default. Deny-mode safety settings are invariants rather than user-configurable escape hatches. Future `approve` and `allow` support must define coherent mode-specific OpenClaw settings instead of partially overriding the generated deny profile.
+Configuration uses strict schema validation and rejects unknown keys by default. Missing policy configuration selects `probe`; malformed or unknown values fail closed. Future `approve` and `allow` support must define coherent mode-specific OpenClaw settings instead of partially overriding the generated profile.
 
 ## Development Loop
 
@@ -570,7 +587,7 @@ Then, in another terminal:
 openclaw devguard tail
 ```
 
-During development in the default `deny` mode:
+During development in the default `probe` mode:
 
 ```text
 edit plugin source
@@ -652,7 +669,7 @@ In scope:
 - bounded source model, authentication, and agent-workspace projection
 - target plugin build, validation, watch, and Gateway supervision
 - redacted tool-call and lifecycle auditing
-- explicit `deny`, `approve`, and `allow` policy modes for real OpenClaw tool calls
+- explicit `probe`, `deny`, `approve`, and `allow` policy modes for OpenClaw tool calls
 - native OpenClaw approval routing
 - runtime capability inspection and boundary warnings
 - reversible DevGuard-managed configuration
@@ -663,7 +680,7 @@ Out of scope unless the project is explicitly rechartered:
 - container, VM, or separate-account orchestration
 - arbitrary target-plugin code isolation
 - direct Node.js, Bun, filesystem, subprocess, or network API interception
-- synthetic tool success, command simulation, fixture playback, or agent-run replay
+- synthetic tool success, semantic command simulation, fixture playback, or agent-run replay
 - a DevGuard-specific approval UI
 - production security policy management
 - remote Agent Box provisioning
@@ -858,7 +875,7 @@ These items are intentionally not candidates on the path to `1.0.0`:
 | ----------------------------------------- | ---------- | ---------------- | ---------------- | ----------------------------------------------------------- |
 | Full-Gateway container or VM mode         | XL         | High             | Poor             | Creates a separate isolation and runtime-management product |
 | Standalone build and validation sandbox   | XL         | Medium           | Poor             | Duplicates container concerns and fragments the build loop  |
-| Synthetic success or command simulation   | XL         | Medium           | Poor             | Fabricates state and crosses the real-execution boundary    |
+| Synthetic success or semantic simulation  | XL         | Medium           | Poor             | Fabricates state and crosses the real-execution boundary    |
 | Tool fixtures or deterministic replay     | L–XL       | Medium           | Poor             | Depends on simulation and expands into a testing platform   |
 | DevGuard-specific interactive approval UI | L          | Low              | Poor             | Duplicates native OpenClaw approval surfaces                |
 | Direct Node.js API interception           | XL         | Low              | Poor             | Is bypassable and would create a false security boundary    |
@@ -870,8 +887,8 @@ These items are intentionally not candidates on the path to `1.0.0`:
 
 1. A developer can initialize an external plugin and run its imported default model through the isolated Gateway when source authentication is portable or explicitly authorized.
 2. The normal profile is not mutated; selected agents retain source workspaces while using isolated agent/session state, and ambient channels are not connected.
-3. `deny` is the default and malformed policy state cannot produce a permissive fallback.
-4. Deterministic probes prove exec, filesystem mutation, and unknown tool attempts are captured and denied without executing.
+3. `probe` is the default, malformed policy state cannot produce a permissive fallback, and unsupported or unknown tools deny.
+4. Deterministic probes prove exec-environment hooks run while the original command does not execute; filesystem mutation and unknown tool attempts are captured and denied.
 5. Target plugin pre-tool hooks run before DevGuard's terminal decision and post-tool hooks receive the real blocked, approved, allowed, failed, or completed outcome exposed by OpenClaw.
 6. `approve` uses native OpenClaw approval routing and denies on timeout, cancellation, missing routing, invalid resolution, or audit failure.
 7. `allow` requires a conspicuous run-scoped selection, permits real OpenClaw execution, and blocks when required audit logging fails.

@@ -18,6 +18,7 @@ export interface DoctorGatewayStatus {
 
 export interface DoctorCheckInput {
   expectedPluginId: string;
+  expectedPolicyMode: string;
   expectedPort: number;
   expectedProfileName: string;
   expectedStateDirectory: string;
@@ -128,8 +129,9 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
     check('channels-disabled', 'channels disabled', status?.ambientChannelsDisabled === true),
     check(
       'guard-active',
-      'deny hook active',
-      status?.hookRegistered === true && status.policyMode === 'deny',
+      'policy hook active',
+      status?.hookRegistered === true && status.policyMode === input.expectedPolicyMode,
+      status?.policyMode,
     ),
     check('unknown-tools-denied', 'unknown tools denied', status?.denyUnknownTools === true),
     check(

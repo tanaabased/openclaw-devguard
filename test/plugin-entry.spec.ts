@@ -103,6 +103,8 @@ describe('index', () => {
       [
         { name: 'before_tool_call', priority: TOOL_CAPTURE_PRIORITY },
         { name: 'before_tool_call', priority: TOOL_GUARD_PRIORITY },
+        { name: 'after_tool_call', priority: undefined },
+        { name: 'before_prompt_build', priority: undefined },
       ],
     );
     const targetPluginDefaultPriority = 0;
@@ -111,6 +113,7 @@ describe('index', () => {
     assert.equal(gatewayMethod, 'devguard.status');
     assert.ok(infoMessages.some((message) => message.includes(String(TOOL_CAPTURE_PRIORITY))));
     assert.ok(infoMessages.some((message) => message.includes(String(TOOL_GUARD_PRIORITY))));
+    assert.ok(infoMessages.some((message) => message.includes('probe policy')));
     assert.ok(
       debugMessages.some((message) => message.includes(api.id) && message.includes(api.version)),
     );

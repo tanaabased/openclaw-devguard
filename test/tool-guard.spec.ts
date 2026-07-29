@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 
 import createToolGuard from '../lib/tool-guard.ts';
+import { createExecProbeResult, EXEC_PROBE_RESULT_PREFIX } from '../utils/exec-probe.ts';
 
 describe('lib/tool-guard', () => {
-  it('should capture a redacted attempt before terminally blocking every tool', async () => {
+  it('should capture and replace exec with a correlated non-mutating probe', async () => {
     const writes: object[][] = [];
     const guard = createToolGuard({
       pluginId: 'openclaw-devguard',
       buildId: 'build-123',
       logPath: '/tmp/devguard-test.jsonl',
+      policyMode: 'probe',
+      probeExecutablePath: '/usr/bin/node',
+      probeScriptPath: '/plugin/dist/exec-probe-task.js',
+      createProbeId: () => 'probe-123',
       environment: {
         NODE_ENV: 'development',
         API_TOKEN: 'secret',
@@ -29,13 +34,35 @@ describe('lib/tool-guard', () => {
     };
     const context = { toolName: 'exec', agentId: 'dev' };
 
-    const captureResult = await guard.captureToolCall(event, context);
-    const result = await guard.blockToolCall(event, context);
+    await guard.captureToolCall(event, context);
+    const decision = await guard.applyToolPolicy(event, context);
 
-    assert.equal(captureResult, undefined);
-    assert.equal(result.block, true);
-    assert.match(result.blockReason, /deny mode/);
-    assert.equal(writes.length, 2);
+    assert.ok('params' in decision);
+    assert.equal(decision.params.host, 'gateway');
+    assert.equal(decision.params.background, false);
+    assert.deepEqual(decision.params.env, {});
+    assert.match(String(decision.params.command), /exec-probe-task\.js/);
+    assert.doesNotMatch(String(decision.params.command), /touch sentinel/);
+
+    const probeResult = createExecProbeResult('probe-123', ['NODE_ENV', 'API_TOKEN'], {
+      NODE_ENV: 'test',
+      API_TOKEN: 'hidden',
+    });
+    await guard.recordToolResult(
+      {
+        toolName: 'exec',
+        params: decision.params,
+        runId: 'run-1',
+        toolCallId: 'call-1',
+        result: {
+          content: [{ text: `${EXEC_PROBE_RESULT_PREFIX}${JSON.stringify(probeResult)}` }],
+        },
+        durationMs: 4,
+      },
+      context,
+    );
+
+    assert.equal(writes.length, 3);
     const attempt = writes[0]?.[0] as {
       event: string;
       params: unknown;
@@ -60,9 +87,62 @@ describe('lib/tool-guard', () => {
       { name: 'NODE_ENV', present: true, length: 4, preview: 't…t' },
     ]);
     assert.equal(attempt.environment.finalToolProcessEnvironmentComplete, false);
-    assert.equal((writes[1]?.[0] as { event: string }).event, 'tool_call_blocked');
-    assert.equal(guard.status().ambientChannelsDisabled, false);
+    assert.equal((writes[1]?.[0] as { event: string }).event, 'tool_call_probed');
+    const completed = writes[2]?.[0] as {
+      event: string;
+      originalCommandExecuted: boolean;
+      environment: Array<{ name: string; redacted?: boolean; sha256?: string }>;
+    };
+    assert.equal(completed.event, 'tool_call_probe_completed');
+    assert.equal(completed.originalCommandExecuted, false);
+    assert.ok(
+      completed.environment.some(({ name, redacted }) => name === 'API_TOKEN' && redacted === true),
+    );
+    assert.ok(
+      completed.environment.some(({ name, sha256 }) => name === 'NODE_ENV' && Boolean(sha256)),
+    );
+    assert.equal(guard.status().policyMode, 'probe');
     assert.equal(guard.status().profileName, 'devguard-example');
+    assert.match(guard.buildPromptContext()?.appendSystemContext ?? '', /not executed/);
+  });
+
+  it('should block tools that do not have a probe implementation', async () => {
+    const guard = createToolGuard({
+      pluginId: 'openclaw-devguard',
+      buildId: 'build-123',
+      logPath: '/tmp/devguard-test.jsonl',
+      policyMode: 'probe',
+      probeExecutablePath: '/usr/bin/node',
+      probeScriptPath: '/plugin/dist/exec-probe-task.js',
+      append: async () => {},
+    });
+
+    const result = await guard.applyToolPolicy(
+      { toolName: 'write', params: {}, toolCallId: 'call-2' },
+      { toolName: 'write' },
+    );
+
+    assert.ok('block' in result);
+    assert.match(result.blockReason, /without a non-mutating probe/);
+  });
+
+  it('should retain explicit deny mode', async () => {
+    const guard = createToolGuard({
+      pluginId: 'openclaw-devguard',
+      buildId: 'build-123',
+      logPath: '/tmp/devguard-test.jsonl',
+      policyMode: 'deny',
+      append: async () => {},
+    });
+
+    const result = await guard.applyToolPolicy(
+      { toolName: 'exec', params: {}, toolCallId: 'call-3' },
+      { toolName: 'exec' },
+    );
+
+    assert.ok('block' in result);
+    assert.match(result.blockReason, /deny mode/);
+    assert.equal(guard.buildPromptContext(), undefined);
   });
 
   it('should remain fail-closed when the append-only log cannot be written', async () => {
@@ -71,6 +151,9 @@ describe('lib/tool-guard', () => {
       pluginId: 'openclaw-devguard',
       buildId: 'build-123',
       logPath: '/unwritable/events.jsonl',
+      policyMode: 'probe',
+      probeExecutablePath: '/usr/bin/node',
+      probeScriptPath: '/plugin/dist/exec-probe-task.js',
       append: async () => {
         throw new Error('disk unavailable');
       },
@@ -79,14 +162,13 @@ describe('lib/tool-guard', () => {
       },
     });
 
-    const event = { toolName: 'unknown_tool', params: {} };
-    const context = { toolName: 'unknown_tool' };
+    const event = { toolName: 'exec', params: {}, toolCallId: 'call-4' };
+    const context = { toolName: 'exec' };
 
-    const captureResult = await guard.captureToolCall(event, context);
-    const result = await guard.blockToolCall(event, context);
+    await guard.captureToolCall(event, context);
+    const result = await guard.applyToolPolicy(event, context);
 
-    assert.equal(captureResult, undefined);
-    assert.equal(result.block, true);
+    assert.ok('block' in result);
     assert.match(result.blockReason, /logging failed/i);
     assert.match(String(loggedError), /disk unavailable/);
   });
