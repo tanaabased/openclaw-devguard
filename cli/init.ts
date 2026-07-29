@@ -187,16 +187,14 @@ async function configureIsolatedState(
   });
 }
 
-async function snapshotConfiguration(
+export async function snapshotConfiguration(
   projectStateRoot: string,
   stateDirectory: string,
 ): Promise<string | undefined> {
   const markerPath = join(projectStateRoot, 'init.json');
-  try {
-    const marker = (await readInitializationMarker(projectStateRoot)) ?? {};
+  const marker = await readInitializationMarker(projectStateRoot);
+  if (marker) {
     return typeof marker.snapshotPath === 'string' ? marker.snapshotPath : undefined;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
 
   await mkdir(projectStateRoot, { recursive: true });
