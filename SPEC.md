@@ -128,7 +128,6 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 |    3 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
 |    4 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
 |    5 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
-|    6 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
 
 ### Required reliability work
 
@@ -173,10 +172,6 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 - Bind each probe to an exact stable built-in tool identity and a disposable DevGuard-owned target.
 - Never generalize an adapter into filesystem isolation, command simulation, or replay infrastructure.
 - Preserve the real downstream OpenClaw result and tell the agent what did not happen.
-
-### Lower-priority candidates
-
-- **OpenClaw compatibility diagnostics:** detect changed public hooks, status fields, and runtime-inspection contracts with actionable errors. Existing runtime inspection and plugin diagnostics make this useful but not yet a release gate.
 
 ### Deprioritized work
 
