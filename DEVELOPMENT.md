@@ -143,7 +143,7 @@ bun run plugin:check
 bun run test:release
 ```
 
-The release-package check builds the plugin, validates its metadata, creates an npm archive, and confirms that the required runtime, manifest, source, CLI, library, asset, and documentation files are present.
+The release-package check reports each package check separately: it builds the plugin, validates its metadata, creates and extracts an npm archive, confirms the package file boundaries, and requires the packed artifact to pass ClawHub validation without warnings. It rebuilds the ignored `dist/` directory, but keeps the npm cache, archive, unpacked package, and ClawHub reports in a temporary directory that it removes before exiting. Publication dry runs remain explicit steps in the release-test workflow.
 
 ### Leia Scenarios
 

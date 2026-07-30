@@ -44,3 +44,12 @@ jobs:
         run: bun run test:release
       - name: Validate npm publish
         run: npm publish --access public --tag edge --dry-run
+      - name: Validate ClawHub publish
+        run: |
+          TARBALL=$(npm pack --silent --ignore-scripts --pack-destination "$RUNNER_TEMP")
+          bunx --no-install clawhub package publish "$RUNNER_TEMP/$TARBALL" \
+            --family code-plugin \
+            --owner tanaab \
+            --source-repo "${{ github.repository }}" \
+            --source-commit "${{ github.event.pull_request.head.sha }}" \
+            --dry-run
