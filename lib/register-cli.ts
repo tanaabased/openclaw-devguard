@@ -174,11 +174,13 @@ export default function registerDevguardCli(
   devguard
     .command('doctor')
     .description('Inspect the current DevGuard development environment.')
+    .option('--fix-permissions', 'Remove group and other access from DevGuard-owned artifacts.')
     .option('--json', 'Emit one machine-readable health report.')
     .action(async (commandOptions: unknown) => {
-      const flags = (commandOptions ?? {}) as { json?: boolean };
+      const flags = (commandOptions ?? {}) as { fixPermissions?: boolean; json?: boolean };
       await runCliAction(options.logger, 'doctor failed', async () => {
         await doctorDevguard(process.cwd(), {
+          fixPermissions: flags.fixPermissions,
           json: flags.json,
           logger: options.logger,
           output,

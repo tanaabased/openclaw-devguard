@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,6 +43,8 @@ describe('cli/init', () => {
         configPath: join(stateDirectory, 'openclaw.json'),
         snapshotPath: null,
       });
+      assert.equal((await lstat(projectStateRoot)).mode & 0o777, 0o700);
+      assert.equal((await lstat(join(projectStateRoot, 'init.json'))).mode & 0o777, 0o600);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

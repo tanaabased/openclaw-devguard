@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 
@@ -27,6 +27,10 @@ import doctorChecks, { latestSuccessfulBuildId } from '../utils/doctor-checks.ts
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
+import inspectPrivateArtifact, {
+  repairPrivateArtifact,
+  type PrivateArtifactKind,
+} from '../utils/private-artifact.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
 import assertSupportedHost from '../utils/supported-host.ts';
 
@@ -43,6 +47,7 @@ type DoctorCommand = (
 
 export interface DoctorDevguardOptions {
   environment?: NodeJS.ProcessEnv;
+  fixPermissions?: boolean;
   json?: boolean;
   logger: Logger;
   output?: CliOutput;
@@ -50,6 +55,16 @@ export interface DoctorDevguardOptions {
   queryStatus?: (options: { token: string; url: string }) => Promise<unknown>;
   runCommand?: DoctorCommand;
   styles?: CliStyles;
+}
+
+interface PrivateArtifact {
+  kind: PrivateArtifactKind;
+  path: string;
+}
+
+interface PermissionReport {
+  issues: string[];
+  repaired: string[];
 }
 
 function errorMessage(error: unknown): string {
@@ -103,6 +118,82 @@ function importedAgentIds(
   } catch (error) {
     return { error: `could not parse initialization marker: ${errorMessage(error)}` };
   }
+}
+
+function isWithin(root: string, path: string): boolean {
+  const child = relative(resolve(root), resolve(path));
+  return child !== '' && child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child);
+}
+
+function privateArtifacts(
+  projectStateRoot: string,
+  stateDirectory: string,
+  logPath: string,
+  agents: unknown,
+): PrivateArtifact[] {
+  const agentRoot = join(stateDirectory, 'agents');
+  const agentDirectories = Array.isArray(agents)
+    ? agents.flatMap((value): PrivateArtifact[] => {
+        if (value === null || Array.isArray(value) || typeof value !== 'object') return [];
+        const agentDir = (value as Record<string, unknown>).agentDir;
+        if (typeof agentDir !== 'string' || !isAbsolute(agentDir)) return [];
+        return isWithin(agentRoot, agentDir) ? [{ kind: 'directory', path: agentDir }] : [];
+      })
+    : [];
+  const artifacts: PrivateArtifact[] = [
+    { kind: 'directory', path: projectStateRoot },
+    { kind: 'directory', path: stateDirectory },
+    { kind: 'directory', path: dirname(logPath) },
+    { kind: 'file', path: join(projectStateRoot, 'gateway-token') },
+    { kind: 'file', path: join(projectStateRoot, 'init.json') },
+    { kind: 'file', path: join(projectStateRoot, 'openclaw.before-devguard.json') },
+    { kind: 'file', path: logPath },
+    { kind: 'file', path: join(projectStateRoot, 'logs', 'raw-stream.jsonl') },
+    { kind: 'file', path: join(stateDirectory, 'openclaw.json') },
+    ...agentDirectories,
+  ];
+  return [
+    ...new Map(
+      artifacts.map((artifact) => [`${artifact.kind}:${artifact.path}`, artifact]),
+    ).values(),
+  ];
+}
+
+async function inspectArtifactPermissions(
+  artifacts: readonly PrivateArtifact[],
+  fixPermissions: boolean,
+): Promise<PermissionReport> {
+  const initial = await Promise.all(
+    artifacts.map(({ kind, path }) => inspectPrivateArtifact(path, kind)),
+  );
+  const repaired: string[] = [];
+  const repairErrors: string[] = [];
+  if (fixPermissions) {
+    for (const status of initial) {
+      if (!status.exists || !status.issue || status.mode === undefined) continue;
+      try {
+        const result = await repairPrivateArtifact(status.path, status.kind);
+        if (!result.issue) repaired.push(status.path);
+      } catch (error) {
+        repairErrors.push(
+          `${status.path}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  }
+
+  const final = await Promise.all(
+    artifacts.map(({ kind, path }) => inspectPrivateArtifact(path, kind)),
+  );
+  return {
+    repaired,
+    issues: [
+      ...final.flatMap((status) =>
+        status.exists && status.issue ? [`${status.path}: ${status.issue}`] : [],
+      ),
+      ...repairErrors,
+    ],
+  };
 }
 
 export default async function doctorDevguard(
@@ -233,6 +324,15 @@ export default async function doctorDevguard(
       : undefined;
   const stateConfigError =
     gatewayConfig.error ?? toolsConfig.error ?? agentDefaultsConfig.error ?? agentsConfig.error;
+  const permissions = await inspectArtifactPermissions(
+    privateArtifacts(
+      paths.projectStateRoot,
+      paths.stateDirectory,
+      paths.logPath,
+      agentsConfig.value,
+    ),
+    options.fixPermissions === true,
+  );
 
   const queryStatus =
     options.queryStatus ??
@@ -256,6 +356,8 @@ export default async function doctorDevguard(
   const doctorResult = pluginDoctor.value;
   const manifestValue = manifest.value as { id?: unknown } | undefined;
   const checks = doctorChecks({
+    artifactPermissionsDetail: permissions.issues.join('; ') || undefined,
+    artifactPermissionsOk: permissions.issues.length === 0,
     expectedPluginId: config.plugin.id,
     expectedPolicyMode: config.policy.mode,
     expectedPort: config.gateway.port,
@@ -284,7 +386,13 @@ export default async function doctorDevguard(
   const failed = checks.filter((check) => !check.ok);
 
   if (options.json) {
-    writeCliLines(output, [JSON.stringify({ ok: failed.length === 0, checks })]);
+    writeCliLines(output, [
+      JSON.stringify({
+        ok: failed.length === 0,
+        checks,
+        repairedPermissions: permissions.repaired,
+      }),
+    ]);
   } else {
     const importedAgents = profileImport.value;
     writeCliLines(output, [
@@ -296,6 +404,17 @@ export default async function doctorDevguard(
       }),
       ...(importedAgents
         ? [formatCliField('agents', importedAgents.join(', '), options.styles)]
+        : []),
+      ...(options.fixPermissions
+        ? [
+            formatCliField(
+              'permissions',
+              permissions.repaired.length === 0
+                ? 'unchanged'
+                : `${permissions.repaired.length} repaired`,
+              options.styles,
+            ),
+          ]
         : []),
     ]);
   }

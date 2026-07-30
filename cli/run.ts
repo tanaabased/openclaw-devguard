@@ -26,6 +26,7 @@ import warnIfAuditLogLarge from '../utils/audit-log-size.ts';
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
+import { ensurePrivateFile } from '../utils/private-artifact.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
 import assertSupportedHost from '../utils/supported-host.ts';
 
@@ -88,6 +89,8 @@ export default async function runDevguard(
   if (gatewayToken.length === 0) throw new Error('DevGuard isolated Gateway token is empty');
   await warnIfAuditLogLarge({ logPath: paths.logPath, logger: options.logger });
   const gatewayUrl = `ws://127.0.0.1:${config.gateway.port}`;
+  const rawStreamPath = join(paths.projectStateRoot, 'logs', 'raw-stream.jsonl');
+  if (options.unsafeRawStream) await ensurePrivateFile(rawStreamPath);
 
   let buildSequence = 0;
   let buildId = '';
@@ -139,11 +142,7 @@ export default async function runDevguard(
     startGateway: () => {
       const args = ['gateway', 'run', '--port', String(config.gateway.port)];
       if (options.unsafeRawStream) {
-        args.push(
-          '--raw-stream',
-          '--raw-stream-path',
-          join(paths.projectStateRoot, 'logs', 'raw-stream.jsonl'),
-        );
+        args.push('--raw-stream', '--raw-stream-path', rawStreamPath);
       }
       return spawn('openclaw', openClawProfileArguments(paths.profileName, args), {
         cwd: root,

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -99,6 +99,10 @@ describe('lib/profile-import', () => {
     const patch = resolved.configPatch as OpenClawConfig;
 
     assert.deepEqual(resolved.agentIds, ['main', 'ops']);
+    assert.deepEqual(resolved.agentDirectories, [
+      '/isolated/state/agents/main/agent',
+      '/isolated/state/agents/ops/agent',
+    ]);
     assert.deepEqual(resolved.workspaceIdentityImports, [
       { agentId: 'main', workspace: '/source/workspaces/main' },
     ]);
@@ -475,6 +479,7 @@ describe('lib/profile-import', () => {
         }),
         destinationAgentDir,
       );
+      assert.equal((await lstat(destinationAgentDir)).mode & 0o777, 0o700);
     } finally {
       clearRuntimeAuthProfileStoreSnapshots();
       if (previousStateDirectory === undefined) delete process.env.OPENCLAW_STATE_DIR;

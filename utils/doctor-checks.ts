@@ -17,6 +17,8 @@ export interface DoctorGatewayStatus {
 }
 
 export interface DoctorCheckInput {
+  artifactPermissionsDetail?: string;
+  artifactPermissionsOk: boolean;
   expectedPluginId: string;
   expectedPolicyMode: string;
   expectedPort: number;
@@ -127,6 +129,12 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
 
   return [
     check('initialized', 'initialized state', input.initialized, 'run devguard init first'),
+    check(
+      'artifact-permissions',
+      'private artifact permissions',
+      input.artifactPermissionsOk,
+      input.artifactPermissionsDetail,
+    ),
     check(
       'profile-import',
       'source profile imported',

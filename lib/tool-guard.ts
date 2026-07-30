@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { appendFile, mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
 
 import {
   buildExecProbeCommand,
@@ -12,6 +10,7 @@ import {
   redactValue,
   summarizeEnvironment,
 } from '../utils/log-redaction.ts';
+import { appendPrivateFile } from '../utils/private-artifact.ts';
 
 export type ToolPolicyMode = 'deny' | 'probe';
 
@@ -84,8 +83,7 @@ const PROBE_SYSTEM_CONTEXT =
   'DevGuard probe mode replaces supported tool execution with a non-mutating recorder. An exec result describes only the probe environment: the originally requested command was not executed, its side effects did not occur, and it should not be retried unless the user explicitly asks.';
 
 async function appendJsonl(path: string, records: readonly object[]): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`, 'utf8');
+  await appendPrivateFile(path, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`);
 }
 
 function classifyEffects(toolName: string): string[] {

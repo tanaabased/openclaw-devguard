@@ -1,9 +1,35 @@
 import assert from 'node:assert/strict';
+import { lstat, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 import createToolGuard from '../lib/tool-guard.ts';
 import { createExecProbeResult, EXEC_PROBE_RESULT_PREFIX } from '../utils/exec-probe.ts';
 
 describe('lib/tool-guard', () => {
+  it('should create private tool-call audit logs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'devguard-tool-guard-'));
+    const logPath = join(root, 'logs', 'events.jsonl');
+
+    try {
+      const guard = createToolGuard({
+        pluginId: 'openclaw-devguard',
+        buildId: 'build-123',
+        logPath,
+        policyMode: 'deny',
+      });
+      await guard.captureToolCall(
+        { toolName: 'exec', params: {}, toolCallId: 'call-private' },
+        { toolName: 'exec' },
+      );
+
+      assert.equal((await lstat(dirname(logPath))).mode & 0o777, 0o700);
+      assert.equal((await lstat(logPath)).mode & 0o777, 0o600);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('should capture and replace exec with a correlated non-mutating probe', async () => {
     const writes: object[][] = [];
     const guard = createToolGuard({

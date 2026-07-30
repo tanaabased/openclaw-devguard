@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
@@ -88,11 +88,15 @@ describe('cli/restore', () => {
       assert.equal(first.restoredSnapshot, true);
       assert.equal(second.changed, false);
       assert.equal(await readFile(configPath, 'utf8'), '{ original: true }\n');
+      assert.equal((await lstat(paths.stateDirectory)).mode & 0o777, 0o700);
+      assert.equal((await lstat(configPath)).mode & 0o777, 0o600);
       assert.equal(await exists(join(paths.stateDirectory, 'temporary.json')), false);
       assert.equal(await exists(markerPath), false);
       assert.equal(await exists(snapshotPath), false);
       assert.equal(await exists(join(paths.projectStateRoot, 'gateway-token')), false);
       const log = await readFile(paths.logPath, 'utf8');
+      assert.equal((await lstat(dirname(paths.logPath))).mode & 0o777, 0o700);
+      assert.equal((await lstat(paths.logPath)).mode & 0o777, 0o600);
       assert.match(log, /"event":"existing"/);
       assert.match(log, /"event":"configuration_restored"/);
       assert.match(stripVTControlCharacters(writes[0] ?? ''), /^restored\s+example-plugin/m);

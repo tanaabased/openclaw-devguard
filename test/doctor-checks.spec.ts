@@ -23,6 +23,7 @@ const stateConfig = {
 describe('utils/doctor-checks', () => {
   it('should accept a fully isolated current probe-mode environment', () => {
     const checks = doctorChecks({
+      artifactPermissionsOk: true,
       expectedPluginId: 'example-plugin',
       expectedPolicyMode: 'probe',
       expectedPort: 19_001,
@@ -48,7 +49,7 @@ describe('utils/doctor-checks', () => {
       stateConfig,
     });
 
-    assert.equal(checks.length, 21);
+    assert.equal(checks.length, 22);
     assert.deepEqual(
       checks.filter(({ ok }) => !ok),
       [],
@@ -57,6 +58,7 @@ describe('utils/doctor-checks', () => {
 
   it('should reject an imported OpenAI model that bypasses the OpenClaw tool runtime', () => {
     const checks = doctorChecks({
+      artifactPermissionsOk: true,
       expectedPluginId: 'example-plugin',
       expectedPolicyMode: 'probe',
       expectedPort: 19_001,
@@ -92,6 +94,8 @@ describe('utils/doctor-checks', () => {
 
   it('should report independent safety and runtime failures together', () => {
     const checks = doctorChecks({
+      artifactPermissionsDetail: '/tmp/events.jsonl: mode 0644 grants group or other access',
+      artifactPermissionsOk: false,
       expectedPluginId: 'example-plugin',
       expectedPolicyMode: 'probe',
       expectedPort: 19_001,
@@ -108,6 +112,7 @@ describe('utils/doctor-checks', () => {
 
     const failed = new Set(checks.filter(({ ok }) => !ok).map(({ id }) => id));
     assert.ok(failed.has('initialized'));
+    assert.ok(failed.has('artifact-permissions'));
     assert.ok(failed.has('profile-import'));
     assert.ok(failed.has('agent-state-isolated'));
     assert.ok(failed.has('profile-isolated'));

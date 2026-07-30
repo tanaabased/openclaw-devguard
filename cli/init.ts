@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
-import { copyFile, mkdir, readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import {
@@ -30,6 +30,11 @@ import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
+import {
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+  repairPrivateArtifact,
+} from '../utils/private-artifact.ts';
 import assertSupportedHost from '../utils/supported-host.ts';
 
 const DEVGUARD_ASSISTANT_NAME = 'DEVGUARD';
@@ -206,6 +211,7 @@ async function configureIsolatedState(
     stateDirectory,
   });
   const tokenPath = join(projectStateRoot, 'gateway-token');
+  await repairPrivateArtifact(tokenPath, 'file');
   let gatewayToken: string;
   try {
     gatewayToken = (await readFile(tokenPath, 'utf8')).trim();
@@ -229,6 +235,11 @@ async function configureIsolatedState(
       input: JSON.stringify(patch),
     },
   );
+  const configPath = join(stateDirectory, 'openclaw.json');
+  const configStatus = await repairPrivateArtifact(configPath, 'file');
+  if (!configStatus.exists) {
+    throw new Error(`OpenClaw did not create the isolated configuration: ${configPath}`);
+  }
 }
 
 export async function snapshotConfiguration(
@@ -243,13 +254,14 @@ export async function snapshotConfiguration(
     return typeof marker.snapshotPath === 'string' ? marker.snapshotPath : undefined;
   }
 
-  await mkdir(projectStateRoot, { recursive: true });
+  await ensurePrivateDirectory(projectStateRoot);
   const configPath = join(stateDirectory, 'openclaw.json');
   const snapshotPath = join(projectStateRoot, 'openclaw.before-devguard.json');
   let snapshot: string | undefined;
   try {
-    await mkdir(dirname(snapshotPath), { recursive: true });
-    await copyFile(configPath, snapshotPath);
+    const contents = await readFile(configPath);
+    await ensurePrivateFile(snapshotPath);
+    await writeFile(snapshotPath, contents);
     snapshot = snapshotPath;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -261,7 +273,7 @@ export async function snapshotConfiguration(
       null,
       2,
     )}\n`,
-    'utf8',
+    { encoding: 'utf8', flag: 'wx', mode: 0o600 },
   );
   return snapshot;
 }
@@ -287,6 +299,7 @@ async function writeProfileImportMarker(
     },
   };
   const temporaryPath = `${markerPath}.next`;
+  await ensurePrivateFile(temporaryPath);
   await writeFile(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   await rename(temporaryPath, markerPath);
 }
@@ -336,6 +349,19 @@ export default async function initDevguard(
   const assistantAvatar = await readFile(join(devguardRoot, 'assets', 'devbot.png'));
   const { config, created } = await ensureProjectConfig(pluginRoot);
   const paths = resolveProjectPaths(pluginRoot, config.plugin.id, environment);
+  await Promise.all([
+    ensurePrivateDirectory(paths.projectStateRoot),
+    ensurePrivateDirectory(paths.stateDirectory),
+  ]);
+  await Promise.all([
+    repairPrivateArtifact(dirname(paths.logPath), 'directory'),
+    repairPrivateArtifact(join(paths.projectStateRoot, 'gateway-token'), 'file'),
+    repairPrivateArtifact(join(paths.projectStateRoot, 'init.json'), 'file'),
+    repairPrivateArtifact(join(paths.projectStateRoot, 'openclaw.before-devguard.json'), 'file'),
+    repairPrivateArtifact(paths.logPath, 'file'),
+    repairPrivateArtifact(join(paths.projectStateRoot, 'logs', 'raw-stream.jsonl'), 'file'),
+    repairPrivateArtifact(join(paths.stateDirectory, 'openclaw.json'), 'file'),
+  ]);
   const existingMarker = await readInitializationMarker(paths.projectStateRoot);
   if (existingMarker) {
     parseRestoreMarker(
@@ -367,6 +393,7 @@ export default async function initDevguard(
     }
   }
   const profileImport = resolveProfileImport(preparedProfileImport, copyOAuth);
+  await Promise.all(profileImport.agentDirectories.map(ensurePrivateDirectory));
   const snapshotPath = await snapshotConfiguration(
     paths.projectStateRoot,
     paths.stateDirectory,
@@ -453,6 +480,7 @@ export default async function initDevguard(
     openClawProfileArguments(paths.profileName, ['plugins', 'doctor']),
     { env: isolatedEnvironment },
   );
+  await repairPrivateArtifact(join(paths.stateDirectory, 'openclaw.json'), 'file');
   logInfo(options.logger, `initialized plugin ${config.plugin.id}`);
 
   const result = {

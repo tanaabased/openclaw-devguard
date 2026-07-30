@@ -1,4 +1,4 @@
-import { access, mkdir } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import {
@@ -21,6 +21,7 @@ import processCommand, {
   type ProcessCommandOptions,
   type ProcessCommandResult,
 } from './process-command.ts';
+import { ensurePrivateDirectory } from '../utils/private-artifact.ts';
 import {
   normalizeAgentIds,
   providerFromModelRef,
@@ -87,6 +88,7 @@ export interface ResolvedAgentAuthImport {
 
 export interface ResolvedProfileImport {
   agentAuth: ResolvedAgentAuthImport[];
+  agentDirectories: string[];
   agentIds: string[];
   auth: {
     copied: number;
@@ -418,6 +420,7 @@ export function resolveProfileImport(
 
   return {
     agentAuth,
+    agentDirectories: prepared.agents.map((agent) => agent.destinationAgentDir),
     agentIds: prepared.agents.map((agent) => agent.id),
     auth,
     configPatch: profileConfigPatch(prepared, agentAuth),
@@ -465,9 +468,7 @@ export async function applyProfileAuthImport(
   dependencies: ProfileImportDependencies = {},
 ): Promise<void> {
   const saveAuthStore = dependencies.saveAuthStore ?? defaultSaveAuthStore;
-  const ensureAgentDir =
-    dependencies.ensureAgentDir ??
-    ((agentDir: string) => mkdir(agentDir, { recursive: true, mode: 0o700 }).then(() => undefined));
+  const ensureAgentDir = dependencies.ensureAgentDir ?? ensurePrivateDirectory;
   for (const { destinationAgentDir, selection } of resolved.agentAuth) {
     if (selection.copiedProfileIds.length === 0) continue;
     await ensureAgentDir(destinationAgentDir);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -37,6 +37,9 @@ describe('cli/doctor', () => {
     const environment = { DEVGUARD_HOME: devguardHome, HOME: join(root, 'user-home') };
     const paths = resolveProjectPaths(root, config.plugin.id, environment);
     const nested = join(root, 'examples', 'doctor');
+    const markerPath = join(paths.projectStateRoot, 'init.json');
+    const tokenPath = join(paths.projectStateRoot, 'gateway-token');
+    const configPath = join(paths.stateDirectory, 'openclaw.json');
     const writes: string[] = [];
     const commands: string[][] = [];
     const logger: Logger = { info() {}, warn() {}, error() {} };
@@ -123,7 +126,7 @@ describe('cli/doctor', () => {
         writeFile(join(root, 'devguard.json'), JSON.stringify(config)),
         writeFile(join(root, 'openclaw.plugin.json'), JSON.stringify({ id: 'example-plugin' })),
         writeFile(
-          join(paths.projectStateRoot, 'init.json'),
+          markerPath,
           JSON.stringify({
             version: 2,
             profileName: paths.profileName,
@@ -132,19 +135,29 @@ describe('cli/doctor', () => {
             profileImport: { agentIds: ['main'] },
           }),
         ),
-        writeFile(join(paths.projectStateRoot, 'gateway-token'), 'gateway-secret\n'),
-        writeFile(join(paths.stateDirectory, 'openclaw.json'), JSON.stringify(stateConfig)),
+        writeFile(tokenPath, 'gateway-secret\n'),
+        writeFile(configPath, JSON.stringify(stateConfig)),
         writeFile(
           paths.logPath,
           `${JSON.stringify({ event: 'build_succeeded', pluginBuildId: 'build-1' })}\n`,
         ),
       ]);
+      await Promise.all([
+        chmod(paths.projectStateRoot, 0o700),
+        chmod(paths.stateDirectory, 0o700),
+        chmod(dirname(paths.logPath), 0o700),
+        chmod(markerPath, 0o600),
+        chmod(tokenPath, 0o600),
+        chmod(configPath, 0o600),
+        chmod(paths.logPath, 0o600),
+      ]);
 
       await doctorDevguard(nested, doctorOptions(writes, passingStatus));
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 22);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 23);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
+      assert.match(writes[0] ?? '', /^pass\s+private artifact permissions/m);
       assert.match(writes[0] ?? '', /^agents\s+main$/m);
       assert.deepEqual(commands, [
         ['--profile', paths.profileName, 'config', 'get', 'gateway', '--json'],
@@ -172,12 +185,15 @@ describe('cli/doctor', () => {
       const passingReport = JSON.parse(writes[0] ?? '') as {
         checks: Array<{ id: string; ok: boolean }>;
         ok: boolean;
+        repairedPermissions: string[];
       };
       assert.equal(passingReport.ok, true);
+      assert.deepEqual(passingReport.repairedPermissions, []);
       assert.deepEqual(
         passingReport.checks.map(({ id }) => id),
         [
           'initialized',
+          'artifact-permissions',
           'profile-import',
           'agent-state-isolated',
           'profile-isolated',
@@ -204,6 +220,16 @@ describe('cli/doctor', () => {
         passingReport.checks.filter(({ ok }) => !ok),
         [],
       );
+
+      await chmod(markerPath, 0o644);
+      writes.length = 0;
+      commands.length = 0;
+      await doctorDevguard(nested, {
+        ...doctorOptions(writes, passingStatus),
+        fixPermissions: true,
+      });
+      assert.match(writes[0] ?? '', /^permissions\s+1 repaired$/m);
+      assert.equal((await lstat(markerPath)).mode & 0o777, 0o600);
 
       writes.length = 0;
       await assert.rejects(

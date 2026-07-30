@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import {
@@ -13,6 +13,11 @@ import {
 import { type Logger, reportError } from '../lib/logger.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
+import {
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+  repairPrivateArtifact,
+} from '../utils/private-artifact.ts';
 import parseRestoreMarker, { type RestoreMarker } from '../utils/restore-marker.ts';
 import assertSupportedHost from '../utils/supported-host.ts';
 
@@ -52,14 +57,17 @@ async function readMarker(
 
 async function writeMarker(path: string, marker: RestoreMarker): Promise<void> {
   const temporaryPath = `${path}.next`;
+  await ensurePrivateFile(temporaryPath);
   await writeFile(temporaryPath, `${JSON.stringify(marker, null, 2)}\n`, 'utf8');
   await rename(temporaryPath, path);
 }
 
 async function restoreSnapshot(snapshotPath: string, configPath: string): Promise<void> {
-  await mkdir(dirname(configPath), { recursive: true });
+  await repairPrivateArtifact(snapshotPath, 'file');
+  await ensurePrivateDirectory(dirname(configPath));
   const temporaryPath = `${configPath}.devguard-restore`;
-  await copyFile(snapshotPath, temporaryPath);
+  await ensurePrivateFile(temporaryPath);
+  await writeFile(temporaryPath, await readFile(snapshotPath));
   await rename(temporaryPath, configPath);
 }
 
@@ -81,6 +89,16 @@ export default async function restoreDevguard(
     paths.stateDirectory,
     paths.profileName,
   );
+  if (marker) {
+    await Promise.all([
+      repairPrivateArtifact(paths.projectStateRoot, 'directory'),
+      repairPrivateArtifact(dirname(paths.logPath), 'directory'),
+      repairPrivateArtifact(markerPath, 'file'),
+      repairPrivateArtifact(snapshotPath, 'file'),
+      repairPrivateArtifact(tokenPath, 'file'),
+      repairPrivateArtifact(paths.logPath, 'file'),
+    ]);
+  }
   const result: RestoreDevguardResult = {
     changed: marker !== undefined,
     logPath: paths.logPath,

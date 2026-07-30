@@ -1,5 +1,4 @@
-import { appendFile, mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { appendPrivateFile } from '../utils/private-artifact.ts';
 
 export interface RuntimeEvent {
   event: string;
@@ -20,8 +19,7 @@ export interface RuntimeEventRecorderOptions {
 }
 
 async function appendJsonl(path: string, record: RuntimeEvent): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await appendFile(path, `${JSON.stringify(record)}\n`, 'utf8');
+  await appendPrivateFile(path, `${JSON.stringify(record)}\n`);
 }
 
 /** Serializes lifecycle records so their JSONL order matches the observed run order. */
