@@ -42,6 +42,7 @@ describe('cli/doctor', () => {
     const configPath = join(paths.stateDirectory, 'openclaw.json');
     const writes: string[] = [];
     const commands: string[][] = [];
+    const devguardCompatibility: Array<{ message: string; severity: 'warn' }> = [];
     const logger: Logger = { info() {}, warn() {}, error() {} };
     const stateConfig = {
       gateway: {
@@ -95,6 +96,19 @@ describe('cli/doctor', () => {
       }
       if (profileArgs[0] === 'config' && profileArgs[2] === 'agents.list') {
         return { code: 0, output: JSON.stringify(stateConfig.agents.list) };
+      }
+      if (profileArgs[0] === 'plugins' && profileArgs[1] === 'inspect') {
+        const pluginId = profileArgs[2]!;
+        return {
+          code: 0,
+          output: JSON.stringify({
+            plugin: { id: pluginId, status: 'loaded' },
+            typedHooks: [],
+            cliCommands: pluginId === 'openclaw-devguard' ? ['devguard'] : [],
+            gatewayMethods: [],
+            compatibility: pluginId === 'openclaw-devguard' ? devguardCompatibility : [],
+          }),
+        };
       }
       return { code: 0, output: '{}' };
     };
@@ -155,7 +169,7 @@ describe('cli/doctor', () => {
       await doctorDevguard(nested, doctorOptions(writes, passingStatus));
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 23);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 24);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
       assert.match(writes[0] ?? '', /^pass\s+private artifact permissions/m);
       assert.match(writes[0] ?? '', /^agents\s+main$/m);
@@ -170,6 +184,15 @@ describe('cli/doctor', () => {
           'plugins',
           'inspect',
           'example-plugin',
+          '--runtime',
+          '--json',
+        ],
+        [
+          '--profile',
+          paths.profileName,
+          'plugins',
+          'inspect',
+          'openclaw-devguard',
           '--runtime',
           '--json',
         ],
@@ -204,6 +227,7 @@ describe('cli/doctor', () => {
           'elevated-disabled',
           'exec-pipeline-open',
           'openai-runtime-compatible',
+          'openclaw-compatible',
           'gateway-reachable',
           'profile-active',
           'channels-disabled',
@@ -220,6 +244,31 @@ describe('cli/doctor', () => {
         passingReport.checks.filter(({ ok }) => !ok),
         [],
       );
+
+      devguardCompatibility.push({
+        message: 'uses a deprecated public hook contract',
+        severity: 'warn',
+      });
+      writes.length = 0;
+      await assert.rejects(
+        doctorDevguard(nested, doctorOptions(writes, passingStatus, true)),
+        /1 DevGuard doctor check failed/,
+      );
+      const compatibilityReport = JSON.parse(writes[0] ?? '') as {
+        checks: Array<{ detail?: string; id: string; ok: boolean }>;
+      };
+      assert.deepEqual(
+        compatibilityReport.checks.filter(({ ok }) => !ok),
+        [
+          {
+            detail: 'uses a deprecated public hook contract',
+            id: 'openclaw-compatible',
+            label: 'openclaw compatibility',
+            ok: false,
+          },
+        ],
+      );
+      devguardCompatibility.length = 0;
 
       await chmod(markerPath, 0o644);
       writes.length = 0;

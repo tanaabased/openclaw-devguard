@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import waitForGatewayStatus, {
   type GatewayStatus,
   GatewayStatusTimeoutError,
+  parseGatewayStatus,
 } from '../lib/gateway-status.ts';
 
 interface Deferred<T> {
@@ -20,14 +21,29 @@ function deferred<T>(): Deferred<T> {
 
 function statusResult(pluginBuildId: string): GatewayStatus {
   return {
+    ambientChannelsDisabled: true,
     denyUnknownTools: true,
+    pluginId: 'example-plugin',
     pluginBuildId,
     hookRegistered: true,
     policyMode: 'probe',
+    profileName: 'devguard-example',
+    stateDirectory: '/home/tester/.openclaw-devguard-example',
   };
 }
 
 describe('lib/gateway-status', () => {
+  it('should reject a changed status response contract with the invalid field', () => {
+    assert.throws(
+      () => parseGatewayStatus({ ...statusResult('build-1'), hookRegistered: 'yes' }),
+      /hookRegistered has an unexpected value/,
+    );
+    assert.throws(
+      () => parseGatewayStatus({ ...statusResult('build-1'), profileName: undefined }),
+      /profileName has an unexpected value/,
+    );
+  });
+
   it('should keep polling when a previous Gateway build answers first', async () => {
     const results = [statusResult('build-1'), statusResult('build-2')];
     let queries = 0;

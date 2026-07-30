@@ -14,7 +14,7 @@ import {
   type CliStyles,
   writeCliLines,
 } from '../lib/cli-output.ts';
-import { type GatewayStatus } from '../lib/gateway-status.ts';
+import { parseGatewayStatus, type GatewayStatus } from '../lib/gateway-status.ts';
 import { type Logger, reportError } from '../lib/logger.ts';
 import processCommand, {
   type ProcessCommandOptions,
@@ -31,8 +31,13 @@ import inspectPrivateArtifact, {
   repairPrivateArtifact,
   type PrivateArtifactKind,
 } from '../utils/private-artifact.ts';
+import parsePluginRuntimeInspection, {
+  type PluginRuntimeInspection,
+} from '../utils/plugin-runtime-inspection.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
 import assertSupportedHost from '../utils/supported-host.ts';
+
+const DEVGUARD_PLUGIN_ID = 'openclaw-devguard';
 
 interface Attempt<T> {
   error?: string;
@@ -95,6 +100,30 @@ function commandJson(result: Attempt<ProcessCommandResult>): Attempt<unknown> {
     return { value: JSON.parse(result.value.output) };
   } catch (error) {
     return { error: `could not parse OpenClaw config output: ${errorMessage(error)}` };
+  }
+}
+
+function commandRuntimeInspection(
+  result: Attempt<ProcessCommandResult>,
+  pluginId: string,
+): Attempt<PluginRuntimeInspection> {
+  if (!result.value) return { error: result.error };
+  if (result.value.code !== 0) {
+    return {
+      error: commandDetail(
+        result.value,
+        `runtime inspection for ${pluginId} exited ${result.value.code}`,
+      ),
+    };
+  }
+  try {
+    return {
+      value: parsePluginRuntimeInspection(JSON.parse(result.value.output), pluginId),
+    };
+  } catch (error) {
+    return {
+      error: `could not validate OpenClaw runtime inspection for ${pluginId}: ${errorMessage(error)}`,
+    };
   }
 }
 
@@ -227,7 +256,8 @@ export default async function doctorDevguard(
     agentsConfigResult,
     manifest,
     log,
-    runtimeInspection,
+    targetRuntimeInspectionResult,
+    devguardRuntimeInspectionResult,
     pluginDoctor,
     token,
   ] = await Promise.all([
@@ -281,6 +311,22 @@ export default async function doctorDevguard(
           'plugins',
           'inspect',
           config.plugin.id,
+          '--runtime',
+          '--json',
+        ]),
+        {
+          allowFailure: true,
+          env: isolatedEnvironment,
+        },
+      ),
+    ),
+    attempt(() =>
+      runCommand(
+        'openclaw',
+        openClawProfileArguments(paths.profileName, [
+          'plugins',
+          'inspect',
+          DEVGUARD_PLUGIN_ID,
           '--runtime',
           '--json',
         ]),
@@ -349,10 +395,25 @@ export default async function doctorDevguard(
         queryStatus({
           token: gatewayToken,
           url: `ws://127.0.0.1:${config.gateway.port}`,
-        }),
+        }).then(parseGatewayStatus),
       )
     : { error: token.error ?? 'isolated Gateway token is empty' };
-  const runtimeResult = runtimeInspection.value;
+  const targetRuntimeInspection = commandRuntimeInspection(
+    targetRuntimeInspectionResult,
+    config.plugin.id,
+  );
+  const devguardRuntimeInspection = commandRuntimeInspection(
+    devguardRuntimeInspectionResult,
+    DEVGUARD_PLUGIN_ID,
+  );
+  const devguardCompatibilityWarnings = devguardRuntimeInspection.value?.compatibility.filter(
+    ({ severity }) => severity === 'warn',
+  );
+  const openClawCompatibilityDetail =
+    devguardRuntimeInspection.error ??
+    (devguardRuntimeInspection.value?.cliCommands.includes('devguard')
+      ? devguardCompatibilityWarnings?.map(({ message }) => message).join('; ') || undefined
+      : 'OpenClaw runtime inspection does not report the devguard CLI registration');
   const doctorResult = pluginDoctor.value;
   const manifestValue = manifest.value as { id?: unknown } | undefined;
   const checks = doctorChecks({
@@ -370,16 +431,19 @@ export default async function doctorDevguard(
     latestBuildId: log.value ? latestSuccessfulBuildId(log.value) : undefined,
     manifestError: manifest.error,
     manifestId: typeof manifestValue?.id === 'string' ? manifestValue.id : undefined,
+    openClawCompatibilityDetail,
+    openClawCompatibilityOk:
+      devguardRuntimeInspection.value !== undefined &&
+      devguardRuntimeInspection.value.cliCommands.includes('devguard') &&
+      devguardCompatibilityWarnings?.length === 0,
     pluginDoctorDetail: doctorResult
       ? commandDetail(doctorResult, `openclaw plugins doctor exited ${doctorResult.code}`)
       : pluginDoctor.error,
     pluginDoctorOk: doctorResult?.code === 0,
     profileImportError: profileImport.error,
     productionStateDirectory: resolve(join(homedir(), '.openclaw')),
-    runtimeInspectionDetail: runtimeResult
-      ? commandDetail(runtimeResult, `runtime inspection exited ${runtimeResult.code}`)
-      : runtimeInspection.error,
-    runtimeInspectionOk: runtimeResult?.code === 0,
+    runtimeInspectionDetail: targetRuntimeInspection.error,
+    runtimeInspectionOk: targetRuntimeInspection.value !== undefined,
     stateConfig,
     stateConfigError,
   });

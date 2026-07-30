@@ -31,6 +31,8 @@ export interface DoctorCheckInput {
   latestBuildId?: string;
   manifestError?: string;
   manifestId?: string;
+  openClawCompatibilityDetail?: string;
+  openClawCompatibilityOk: boolean;
   pluginDoctorDetail?: string;
   pluginDoctorOk: boolean;
   profileImportError?: string;
@@ -174,6 +176,12 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
       'openai tools use openclaw runtime',
       incompatibleRuntimeRefs.length === 0,
       incompatibleRuntimeRefs.join(', ') || undefined,
+    ),
+    check(
+      'openclaw-compatible',
+      'openclaw compatibility',
+      input.openClawCompatibilityOk,
+      input.openClawCompatibilityDetail,
     ),
     check('gateway-reachable', 'gateway reachable', status !== undefined, input.gatewayError),
     check(

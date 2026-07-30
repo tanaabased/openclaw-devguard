@@ -43,13 +43,14 @@ describe('utils/doctor-checks', () => {
       initialized: true,
       latestBuildId: 'build-1',
       manifestId: 'example-plugin',
+      openClawCompatibilityOk: true,
       pluginDoctorOk: true,
       productionStateDirectory: '/normal/state',
       runtimeInspectionOk: true,
       stateConfig,
     });
 
-    assert.equal(checks.length, 22);
+    assert.equal(checks.length, 23);
     assert.deepEqual(
       checks.filter(({ ok }) => !ok),
       [],
@@ -66,6 +67,7 @@ describe('utils/doctor-checks', () => {
       expectedStateDirectory: '/devguard/state',
       importedAgentIds: ['main'],
       initialized: true,
+      openClawCompatibilityOk: true,
       pluginDoctorOk: true,
       productionStateDirectory: '/normal/state',
       runtimeInspectionOk: true,
@@ -104,6 +106,7 @@ describe('utils/doctor-checks', () => {
       gatewayError: 'connection refused',
       initialized: false,
       manifestId: 'wrong-plugin',
+      openClawCompatibilityOk: false,
       pluginDoctorOk: false,
       productionStateDirectory: '/normal/state',
       runtimeInspectionOk: false,
@@ -119,6 +122,7 @@ describe('utils/doctor-checks', () => {
     assert.ok(failed.has('profile-selected'));
     assert.ok(failed.has('sandbox-disabled'));
     assert.ok(failed.has('exec-pipeline-open'));
+    assert.ok(failed.has('openclaw-compatible'));
     assert.ok(failed.has('gateway-reachable'));
     assert.ok(failed.has('guard-active'));
     assert.ok(failed.has('target-id'));

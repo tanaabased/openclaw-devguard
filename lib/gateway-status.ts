@@ -1,14 +1,14 @@
 export interface GatewayStatus {
-  ambientChannelsDisabled?: boolean;
-  denyUnknownTools?: boolean;
-  pluginId?: string;
-  pluginBuildId?: string;
-  hookRegistered?: boolean;
-  policyMode?: string;
-  profileName?: string;
+  ambientChannelsDisabled: boolean;
+  denyUnknownTools: boolean;
+  pluginId: string;
+  pluginBuildId: string;
+  hookRegistered: boolean;
+  policyMode: string;
+  profileName: string;
   logPath?: string;
   gatewayProcessId?: number;
-  stateDirectory?: string;
+  stateDirectory: string;
 }
 
 export class GatewayStatusTimeoutError extends Error {
@@ -45,11 +45,33 @@ export interface WaitForGatewayStatusOptions {
   timeoutMs: number;
 }
 
-function parseGatewayStatus(value: unknown): GatewayStatus {
+function recordValue(value: unknown): Record<string, unknown> | undefined {
   if (value === null || Array.isArray(value) || typeof value !== 'object') {
-    throw new TypeError('Gateway returned an invalid DevGuard status payload');
+    return undefined;
   }
-  return value as GatewayStatus;
+  return value as Record<string, unknown>;
+}
+
+/** Validates the DevGuard-owned fields returned by the live Gateway status method. */
+export function parseGatewayStatus(value: unknown): GatewayStatus {
+  const status = recordValue(value);
+  if (!status) throw new TypeError('Gateway returned an invalid DevGuard status payload');
+
+  const stringFields = ['pluginId', 'pluginBuildId', 'policyMode', 'profileName', 'stateDirectory'];
+  const booleanFields = ['ambientChannelsDisabled', 'denyUnknownTools', 'hookRegistered'];
+  const invalidField = [
+    ...stringFields.filter(
+      (field) => typeof status[field] !== 'string' || status[field].length === 0,
+    ),
+    ...booleanFields.filter((field) => typeof status[field] !== 'boolean'),
+  ][0];
+  if (invalidField) {
+    throw new TypeError(
+      `Gateway returned an invalid DevGuard status payload: ${invalidField} has an unexpected value`,
+    );
+  }
+
+  return status as unknown as GatewayStatus;
 }
 
 function validateReadyStatus(status: GatewayStatus, options: WaitForGatewayStatusOptions): void {
