@@ -43,19 +43,19 @@ jobs:
       - name: Put Homebrew on PATH
         shell: bash
         run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+      - name: Refresh Homebrew when needed
+        shell: bash
+        run: HOMEBREW_NO_AUTO_UPDATE= brew update-if-needed
+      - name: Install OpenClaw CLI
+        shell: bash
+        run: |
+          brew install openclaw-cli
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
       - name: Install Node
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           package-manager-cache: false
-      - name: Refresh Homebrew when needed
-        shell: bash
-        run: HOMEBREW_NO_AUTO_UPDATE= brew update-if-needed
-      - name: Install Homebrew dependencies
-        shell: bash
-        run: |
-          brew bundle --file "$GITHUB_WORKSPACE/Brewfile" --no-upgrade
-          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
