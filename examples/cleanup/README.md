@@ -25,7 +25,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 # should start the first verified gateway
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-"$GITHUB_WORKSPACE/examples/cleanup/wait-for-plugin-load.sh"
+"$GITHUB_WORKSPACE/scripts/wait-for-plugin-load.sh"
 ```
 
 ## Testing
@@ -50,5 +50,5 @@ grep -F '"event":"plugin_validation_failed"' "$log_path" \
 
 ```bash
 # should stop supervision and its gateway cleanly
-"$GITHUB_WORKSPACE/examples/cleanup/stop-supervision.sh"
+"$GITHUB_WORKSPACE/scripts/stop-supervision.sh"
 ```

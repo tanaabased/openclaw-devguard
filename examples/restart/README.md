@@ -16,7 +16,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 # should start the first verified plugin build
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-"$GITHUB_WORKSPACE/examples/restart/wait-for-plugin-load.sh" 1
+"$GITHUB_WORKSPACE/scripts/wait-for-plugin-load.sh" 1
 ```
 
 ## Testing
@@ -24,7 +24,7 @@ echo "$!" > "$TMPDIR/run.pid"
 ```bash
 # should rebuild and verify a replacement gateway after a watched edit
 printf '\n// leia rebuild\n' >> "$GITHUB_WORKSPACE/index.ts"
-"$GITHUB_WORKSPACE/examples/restart/wait-for-plugin-load.sh" 2
+"$GITHUB_WORKSPACE/scripts/wait-for-plugin-load.sh" 2
 
 # should record two distinct successful builds and one controlled restart
 log_path="$(cat "$TMPDIR/log-path")"
@@ -35,5 +35,5 @@ test "$build_count" -ge 2
 if grep -Eq '"event":"(build_failed|gateway_exited|gateway_start_failed|target_plugin_load_failed)"' "$log_path"; then exit 1; fi
 
 # should stop supervision cleanly
-"$GITHUB_WORKSPACE/examples/restart/stop-supervision.sh"
+"$GITHUB_WORKSPACE/scripts/stop-supervision.sh"
 ```

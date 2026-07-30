@@ -51,7 +51,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 unset OPENAI_API_KEY
 (cd "$TMPDIR/plugin" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-"$GITHUB_WORKSPACE/examples/plugin/wait-for-plugin-load.sh"
+"$GITHUB_WORKSPACE/scripts/wait-for-plugin-load.sh" 1 90
 ```
 
 ## Testing
@@ -99,5 +99,5 @@ if grep -Fq "positronic" "$log_path"; then exit 1; fi
 
 ```bash
 # should stop supervision cleanly
-"$GITHUB_WORKSPACE/examples/plugin/stop-supervision.sh"
+"$GITHUB_WORKSPACE/scripts/stop-supervision.sh"
 ```

@@ -22,8 +22,8 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Chain fixed-string greps when stable tokens must occur on the same line; do not make CLI alignment padding part of an operational scenario contract.
 - Prefer public product CLI output, existing product logs, and ordinary shell assertions over repository-owned semantic checkers.
 - Keep product behavior assertions visible in the README; do not hide expected values or policy outcomes in helper scripts.
-- Move bounded polling, shutdown, and similar process coordination into a clearly named executable Bash script beside the owning scenario when the inline shell would obscure the user flow.
-- Do not use JavaScript for scenario-local coordination that Bash can express directly, and do not create shared helpers until multiple scenarios genuinely need one maintained contract.
+- Move bounded polling, shutdown, and similar process coordination into a clearly named executable Bash script when the inline shell would obscure the user flow. Keep scenario-specific helpers beside their owner; hoist proven shared helpers to root `scripts/` and invoke them directly without copying them into scenario state.
+- Do not use JavaScript for scenario-local coordination that Bash can express directly, and do not hoist helpers until multiple scenarios genuinely need one maintained contract.
 - Do not add preflight `test` checks for files, commands, or environment variables that the next product command necessarily consumes; keep existence and absence checks only when that state is itself the behavior under test.
 - Do not use a helper to inspect OpenClaw configuration or authentication through SDK APIs when the scenario can prove its behavior through public CLI commands.
 - Keep example-specific expected values in the owning README or fixture; shared support scripts must not embed fixture identities or other scenario-specific data.

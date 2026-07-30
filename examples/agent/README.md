@@ -32,7 +32,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 # should start the isolated gateway with both imported identities
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-"$GITHUB_WORKSPACE/examples/agent/wait-for-plugin-load.sh"
+"$GITHUB_WORKSPACE/scripts/wait-for-plugin-load.sh"
 ```
 
 ## Testing
@@ -83,5 +83,5 @@ cmp "$GITHUB_WORKSPACE/examples/agent/riker/avatar.png" "$TMPDIR/source-riker/av
 
 ```bash
 # should stop live supervision cleanly
-"$GITHUB_WORKSPACE/examples/agent/stop-supervision.sh"
+"$GITHUB_WORKSPACE/scripts/stop-supervision.sh"
 ```

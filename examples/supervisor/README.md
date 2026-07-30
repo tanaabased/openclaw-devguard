@@ -24,7 +24,7 @@ if (cd "$GITHUB_WORKSPACE" && openclaw devguard run --once > "$TMPDIR/second-run
 grep -F "supervision is already active" "$TMPDIR/second-run.log" | grep -F "pid"
 
 # should stop the project supervisor cleanly
-"$GITHUB_WORKSPACE/examples/supervisor/stop-supervision.sh"
+"$GITHUB_WORKSPACE/scripts/stop-supervision.sh"
 
 # should diagnose an unrelated port owner without signaling it
 "$GITHUB_WORKSPACE/examples/supervisor/start-unrelated-port-owner.sh" 19001

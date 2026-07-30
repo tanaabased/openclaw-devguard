@@ -41,7 +41,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 unset OPENAI_API_KEY
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-"$GITHUB_WORKSPACE/examples/model/wait-for-plugin-load.sh"
+"$GITHUB_WORKSPACE/scripts/wait-for-plugin-load.sh" 1 90
 ```
 
 ## Testing
@@ -66,5 +66,5 @@ openclaw devguard exec -- agent --session-key devguard-model-live --message "Rep
 
 ```bash
 # should stop live supervision
-"$GITHUB_WORKSPACE/examples/model/stop-supervision.sh"
+"$GITHUB_WORKSPACE/scripts/stop-supervision.sh"
 ```
