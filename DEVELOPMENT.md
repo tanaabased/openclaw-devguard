@@ -58,7 +58,7 @@ OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 
 This foreground process builds and validates DevGuard, starts its isolated Gateway, reports DevGuard and target-plugin diagnostics, and watches the configured source paths. Saving a change triggers another build; the active Gateway is replaced only after the new build and validation succeed.
 
-For example, suppose the change under development adds or inspects `DEVGUARD_EXAMPLE=1` on exec tool requests. Add a temporary debug log at the point where the hook observes or changes the request, save the source, and wait for the first terminal to report the replacement Gateway as ready.
+For example, suppose the change under development adds or inspects `DEVGUARD_EXAMPLE=1` on exec tool requests. Add a temporary debug log at the point where the hook observes or changes the request, and add `DEVGUARD_EXAMPLE` to `logging.environmentValueAllowlist` when the completed probe record needs to prove that the value reached its recorder. Save the source and wait for the first terminal to report the replacement Gateway as ready.
 
 In a second terminal, ask the imported agent to make an exec request:
 
@@ -68,12 +68,12 @@ cd /path/to/openclaw-devguard
 openclaw devguard exec -- agent \
   --agent my-agent \
   --session-key devguard-dogfood \
-  --message "Use the exec tool to print the value of DEVGUARD_EXAMPLE." \
+  --message "Use the exec tool exactly once to run 'printenv DEVGUARD_EXAMPLE', then report the tool result without retrying." \
   --json
 ```
 
 > [!IMPORTANT]
-> DevGuard deny mode blocks the exec request, so no child command runs and there is no final process environment to inspect. The first terminal can show diagnostics from the hook being developed. The DevGuard audit log proves that the agent attempted the tool and that DevGuard blocked it. If the change mutates tool arguments, log the hook's post-mutation view while developing; DevGuard's early capture record is not proof of the final would-be process environment. Sensitive-data obfuscation is best effort, so treat audit logs as sensitive and expect ordinary tool arguments to remain visible.
+> DevGuard probe mode replaces the requested exec command with its recorder, so the original command does not run. The first terminal can show diagnostics from the hook being developed, while the completed probe record can prove that an allowlisted value reached the recorder. DevGuard's early capture record is not proof of the final process environment, and sensitive-data obfuscation remains best effort, so treat audit logs as sensitive. See [`policy.mode`](./ADVANCED.md#policymode) for the complete `probe` and `deny` lifecycle.
 
 Inspect the recorded tool lifecycle and the live isolated environment while `run` remains active:
 
@@ -81,7 +81,7 @@ Inspect the recorded tool lifecycle and the live isolated environment while `run
 # read the current complete audit records without following.
 openclaw devguard tail --no-follow
 
-# verify the isolated profile, target build, and deny hook.
+# verify the isolated profile, target build, and policy hook.
 openclaw devguard doctor
 ```
 

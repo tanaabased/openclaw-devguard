@@ -6,7 +6,7 @@ This guide contains DevGuard's less common operational details and complete conf
 
 ### Isolated Development Model
 
-DevGuard is installed once in the normal OpenClaw profile so that `openclaw devguard` is available. Its tool policy remains inactive in a normal Gateway; capture, deny, and status surfaces activate only in a DevGuard-managed development Gateway. Initializing a target creates a stable native OpenClaw profile derived from the target's plugin ID and absolute repository path:
+DevGuard is installed once in the normal OpenClaw profile so that `openclaw devguard` is available. Its tool policy remains inactive in a normal Gateway; capture, policy, and status surfaces activate only in a DevGuard-managed development Gateway. Initializing a target creates a stable native OpenClaw profile derived from the target's plugin ID and absolute repository path:
 
 ```text
 normal OpenClaw profile: DevGuard CLI and source configuration
@@ -15,14 +15,14 @@ target repository: devguard.json and plugin source
              |
 isolated OpenClaw profile: imported agents + DevGuard + linked target
              |
-owned Gateway: build verification + tool-call capture and deny
+owned Gateway: build verification + tool-call capture and policy
 ```
 
 The target repository owns and should normally commit `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, and logs. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
 
 The absolute target path participates in the profile name and state key. Two checkouts of the same plugin therefore receive different isolated profiles, while repeated initialization of one checkout reuses the same profile.
 
-Agent selections and OAuth-copy consent are machine-local initialization state, not portable project policy, so they are not written to `devguard.json`. The normal source profile is read but not mutated. Imported workspaces remain references to their existing directories; DevGuard creates fresh isolated agent state and does not copy source sessions, channel bindings, browser state, or general OpenClaw configuration.
+Agent selections and OAuth-copy consent are machine-local initialization state, not portable project policy, so they are not written to `devguard.json`. The normal source profile is read but not mutated. Imported workspaces remain references to their existing directories; DevGuard uses isolated agent state without copying source sessions, channel bindings, browser state, or general OpenClaw configuration.
 
 Imported provider, model, and authentication selections remain unchanged. DevGuard does explicitly route imported `openai/*` model entries through OpenClaw's built-in agent runtime inside the isolated profile. OpenAI models otherwise default to the Codex runtime, whose native tool calls cannot accept the parameter rewrite required by DevGuard's non-mutating exec probe. Non-OpenAI runtime policy is preserved.
 
@@ -80,6 +80,9 @@ A typical generated configuration is:
       "args": ["run", "plugin:check"]
     },
     "watch": ["src", "index.ts", "openclaw.plugin.json", "package.json"]
+  },
+  "policy": {
+    "mode": "probe"
   },
   "logging": {
     "environmentValueAllowlist": []
@@ -169,6 +172,19 @@ tsconfig.json
 ```
 
 Paths are resolved from the target root. DevGuard watches file contents and ignores unchanged notifications. A changed build is debounced; if another change arrives during a build, the superseded build is stopped and the latest state is built.
+
+### `policy.mode`
+
+| Type   | Required | Default   |
+| ------ | -------- | --------- |
+| string | no       | `"probe"` |
+
+Selects how DevGuard handles agent-requested tools after earlier OpenClaw and target-plugin hooks have observed or modified the request. New configurations include this field explicitly; configurations created before the policy field was introduced also default to `probe`.
+
+- `probe` records every attempt. An `exec` request is replaced with DevGuard's fixed non-mutating recorder, so the originally requested command does not run. OpenClaw executes the recorder through the real tool and result lifecycle, including target `resolve_exec_env` behavior and downstream result hooks. Tools without an implemented probe are blocked.
+- `deny` records and blocks every tool request. It does not execute the recorder or synthesize a successful tool result.
+
+Both modes fail closed when DevGuard cannot write the required audit record. Only `exec` currently has a probe implementation.
 
 ### `logging.environmentValueAllowlist`
 
@@ -385,11 +401,11 @@ Enables OpenClaw's raw event stream at the target's machine-local log directory.
 
 **`--once`**
 
-Builds and validates the target, starts and verifies the Gateway and deny hook, then stops supervision and exits.
+Builds and validates the target, starts and verifies the Gateway and active policy hook, then stops supervision and exits.
 
 #### Behavior
 
-`run` requires initialized state and its generated Gateway token. It builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, and active deny hook.
+`run` requires initialized state and its generated Gateway token. It builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, policy mode, and active hook.
 
 Without `--once`, it watches every `plugin.watch` path until interrupted. A successful validated build replaces the current Gateway. A failed build or validation is recorded and leaves the last working Gateway running. An unexpected Gateway error, signal, or exit causes `run` to fail and clean up its watcher and child processes.
 
@@ -465,7 +481,7 @@ openclaw devguard doctor
 
 #### Behavior
 
-Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, separation from normal OpenClaw state, imported agents, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active deny hook, runtime plugin inspection, and `openclaw plugins doctor`.
+Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`.
 
 The command prints every check instead of stopping at the first failure. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
 
