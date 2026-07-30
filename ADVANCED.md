@@ -20,6 +20,8 @@ owned Gateway: build verification + tool-call capture and policy
 
 The target repository owns and should normally commit `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, and logs. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
 
+DevGuard creates its canonical state, isolated agent, and log directories with owner-only permissions and creates tokens, markers, snapshots, isolated configuration, audit logs, and optional raw streams as owner-readable and owner-writable files. When it encounters an existing owned artifact, it removes group and other access without widening stricter owner permissions. It does not change the target repository, normal OpenClaw state, imported workspaces, or arbitrary parent directories.
+
 The absolute target path participates in the profile name and state key. Two checkouts of the same plugin therefore receive different isolated profiles, while repeated initialization of one checkout reuses the same profile.
 
 Agent selections and OAuth-copy consent are machine-local initialization state, not portable project policy, so they are not written to `devguard.json`. The normal source profile is read but not mutated. Imported workspaces remain references to their existing directories; DevGuard uses isolated agent state without copying source sessions, channel bindings, browser state, or general OpenClaw configuration.
@@ -407,7 +409,7 @@ Waits the given positive whole number of seconds for the Gateway to load and rep
 
 **`--unsafe-raw-stream`**
 
-Enables OpenClaw's raw event stream at the target's machine-local log directory. Raw streams may contain prompts, model content, and secrets; use this only for deliberate local debugging.
+Enables OpenClaw's raw event stream at the target's machine-local log directory. DevGuard pre-creates the stream as an owner-only file. Raw streams may contain prompts, model content, and secrets; use this only for deliberate local debugging.
 
 **`--once`**
 
@@ -486,18 +488,22 @@ Aggregates configuration, isolated-state, live runtime, and OpenClaw diagnostic 
 #### Usage
 
 ```sh
-openclaw devguard doctor [--json]
+openclaw devguard doctor [--fix-permissions] [--json]
 ```
 
 #### Options
 
+**`--fix-permissions`**
+
+Removes group and other access from existing canonical DevGuard-owned artifacts before evaluating the permission check. Missing optional artifacts are ignored, stricter owner permissions are preserved, and symbolic links or unexpected file types are reported instead of followed.
+
 **`--json`**
 
-Writes one newline-terminated JSON object to standard output with an overall `ok` value and the complete ordered `checks` array. Diagnostics remain separate from standard output.
+Writes one newline-terminated JSON object to standard output with an overall `ok` value, the complete ordered `checks` array, and the `repairedPermissions` paths changed by an explicit repair. Diagnostics remain separate from standard output.
 
 #### Behavior
 
-Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`.
+Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, private permissions on existing canonical artifacts, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`.
 
 The command prints every check instead of stopping at the first failure. Human mode renders the existing styled status list; JSON mode exposes the same check IDs, labels, results, ordering, and failure details. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
 

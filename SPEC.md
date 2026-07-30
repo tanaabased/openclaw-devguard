@@ -123,24 +123,14 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 
 | Rank | Improvement                                      | Complexity | Impact | Leverage  | Disposition |
 | ---: | ------------------------------------------------ | ---------- | ------ | --------- | ----------- |
-|    1 | Private DevGuard state and audit permissions     | M          | High   | Excellent | Required    |
-|    2 | Single-supervisor ownership and port diagnostics | M          | High   | Excellent | Required    |
-|    3 | Bounded build, validation, and process cleanup   | M          | High   | Good      | Required    |
-|    4 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
-|    5 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
-|    6 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
-|    7 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
+|    1 | Single-supervisor ownership and port diagnostics | M          | High   | Excellent | Required    |
+|    2 | Bounded build, validation, and process cleanup   | M          | High   | Good      | Required    |
+|    3 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
+|    4 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
+|    5 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
+|    6 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
 
 ### Required reliability work
-
-#### Private state and audit permissions
-
-Gateway tokens and imported agent directories already request private modes. The remaining work is to apply and diagnose that contract consistently across every DevGuard-owned artifact.
-
-- Create DevGuard-owned state and log directories with private permissions on supported POSIX hosts.
-- Create Gateway tokens, snapshots, initialization or ownership markers, audit logs, and raw streams as private files.
-- Preserve stricter existing permissions.
-- Have `doctor` report broad permissions and repair only canonical DevGuard-owned paths when explicitly supported.
 
 #### Single-supervisor ownership and port diagnostics
 
@@ -197,7 +187,7 @@ Gateway tokens and imported agent directories already request private modes. The
 
 ## Stable Release Direction
 
-`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the three Required reliability items are completed.
+`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the two remaining Required reliability items are completed.
 
 Any candidate mode included before `1.0.0` must have focused tests, CI-first operational evidence, accurate documentation, and fail-closed audit behavior. Unimplemented candidates must not appear in CLI help, accepted configuration, or user documentation as available functionality.
 
