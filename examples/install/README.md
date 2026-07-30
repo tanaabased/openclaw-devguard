@@ -5,10 +5,6 @@ This scenario installs the packed DevGuard package into isolated OpenClaw state 
 ## Setup
 
 ```bash
-# should provide the packed plugin and openclaw cli
-test -f "$DEVGUARD_PACKAGE"
-command -v openclaw >/dev/null
-
 # should install and enable the packed plugin
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
@@ -27,16 +23,18 @@ grep -F "dist/index.js" "$TMPDIR/inspection.json"
 openclaw plugins doctor
 
 # should expose the lightweight devguard command contract
-openclaw devguard --help | grep -F "init"
-openclaw devguard --help | grep -F "profile"
-openclaw devguard --help | grep -F "exec"
+set -o pipefail
+openclaw devguard --help > "$TMPDIR/devguard-help"
+grep -F "init" "$TMPDIR/devguard-help"
+grep -F "profile" "$TMPDIR/devguard-help"
+grep -F "exec" "$TMPDIR/devguard-help"
+grep -F "shell" "$TMPDIR/devguard-help"
+grep -F "run" "$TMPDIR/devguard-help"
+grep -F "doctor" "$TMPDIR/devguard-help"
+grep -F "restore" "$TMPDIR/devguard-help"
 openclaw devguard exec --help | grep -F "<openclaw-args...>"
-openclaw devguard --help | grep -F "shell"
 openclaw devguard shell --help | grep -F "login shell"
-openclaw devguard --help | grep -F "run"
 openclaw devguard run --help | grep -F -- "--once"
 openclaw devguard run --help | grep -F -- "--startup-timeout <seconds>"
 openclaw devguard tail --help | grep -F -- "--no-follow"
-openclaw devguard --help | grep -F "doctor"
-openclaw devguard --help | grep -F "restore"
 ```

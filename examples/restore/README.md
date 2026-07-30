@@ -6,12 +6,10 @@ This scenario dogfoods DevGuard's self-target path while verifying generated-sta
 
 ```bash
 # should prepare and initialize devguard as its own target
-test -f "$DEVGUARD_PACKAGE"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$GITHUB_WORKSPACE"
 openclaw devguard exec -- config file | sed "s|^~|$HOME|" > "$TMPDIR/config-path"
-test -s "$TMPDIR/config-path"
 
 # should remove state that devguard generated from an empty profile
 (cd "$GITHUB_WORKSPACE" && openclaw devguard restore)

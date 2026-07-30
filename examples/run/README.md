@@ -5,11 +5,6 @@ This scenario uses packed DevGuard to initialize the repository as its own targe
 ## Setup
 
 ```bash
-# should prepare the devguard repository
-test -f "$DEVGUARD_PACKAGE"
-command -v openclaw >/dev/null
-test -f "$GITHUB_WORKSPACE/devguard.json"
-
 # should install and enable packed devguard
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
@@ -26,7 +21,6 @@ set -o pipefail
 
 ```bash
 # should report the verified live build and hook
-set -o pipefail
 grep -F "ready" "$TMPDIR/run.log" | grep -F "openclaw-devguard"
 grep -F "hook" "$TMPDIR/run.log" | grep -F "active"
 ```

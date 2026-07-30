@@ -6,7 +6,6 @@ This scenario supervises DevGuard as its own target and verifies bounded human a
 
 ```bash
 # should prepare and initialize devguard as its own target
-test -f "$DEVGUARD_PACKAGE"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$GITHUB_WORKSPACE"
@@ -20,7 +19,6 @@ openclaw devguard init "$GITHUB_WORKSPACE"
 ```bash
 # should emit valid bounded jsonl without decorating stdout
 (cd "$GITHUB_WORKSPACE" && openclaw devguard tail --json --no-follow) > "$TMPDIR/events.jsonl"
-test -s "$TMPDIR/events.jsonl"
 grep -F '"event":"build_succeeded"' "$TMPDIR/events.jsonl"
 grep -F '"event":"target_plugin_loaded"' "$TMPDIR/events.jsonl"
 

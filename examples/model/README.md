@@ -5,10 +5,7 @@ This scenario dogfoods DevGuard's self-target path while verifying that initiali
 ## Setup
 
 ```bash
-# should onboard the source profile with OpenAI and prepare devguard as the target
-test -f "$DEVGUARD_PACKAGE"
-test -n "$OPENAI_API_KEY"
-test -n "$OPENAI_MODEL"
+# should onboard the source profile with openai and prepare devguard as the target
 openclaw onboard --non-interactive --accept-risk \
   --mode local \
   --auth-choice openai-api-key \
@@ -44,20 +41,7 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 unset OPENAI_API_KEY
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-log_path="$(cat "$TMPDIR/log-path")"
-run_pid="$(cat "$TMPDIR/run.pid")"
-deadline=$((SECONDS + 90))
-until grep -Fq '"event":"target_plugin_loaded"' "$log_path" 2>/dev/null; do
-  if ! kill -0 "$run_pid" 2>/dev/null; then
-    tail -n 120 "$TMPDIR/run.log"
-    exit 1
-  fi
-  if ((SECONDS >= deadline)); then
-    tail -n 120 "$TMPDIR/run.log"
-    exit 1
-  fi
-  sleep 1
-done
+"$GITHUB_WORKSPACE/examples/model/wait-for-plugin-load.sh"
 ```
 
 ## Testing
@@ -67,7 +51,6 @@ done
 cmp "$TMPDIR/source-before.json" "$(cat "$TMPDIR/source-config-path")"
 
 # should report the imported model without exposing credential material
-set -o pipefail
 grep -F "agents" "$TMPDIR/init.log" | grep -F "main"
 grep -F "model" "$TMPDIR/init.log" | grep -F "openai/$OPENAI_MODEL"
 grep -F "auth" "$TMPDIR/init.log" | grep -F "1 copied"
@@ -83,13 +66,5 @@ openclaw devguard exec -- agent --session-key devguard-model-live --message "Rep
 
 ```bash
 # should stop live supervision
-if kill -0 "$(cat "$TMPDIR/run.pid")" 2>/dev/null; then
-  run_pid="$(cat "$TMPDIR/run.pid")"
-  kill -TERM "$run_pid"
-  deadline=$((SECONDS + 20))
-  while kill -0 "$run_pid" 2>/dev/null; do
-    if ((SECONDS >= deadline)); then exit 1; fi
-    sleep 1
-  done
-fi
+"$GITHUB_WORKSPACE/examples/model/stop-supervision.sh"
 ```

@@ -6,7 +6,6 @@ This scenario dogfoods DevGuard's self-target path while verifying that a login 
 
 ```bash
 # should install, enable, and initialize devguard
-test -f "$DEVGUARD_PACKAGE"
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
 openclaw plugins enable openclaw-devguard
 openclaw devguard init "$GITHUB_WORKSPACE"

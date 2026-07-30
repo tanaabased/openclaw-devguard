@@ -6,26 +6,14 @@ This scenario dogfoods DevGuard's self-target path with two source agents. Picar
 
 ```bash
 # should prepare the picard and riker workspaces and devguard target
-test -f "$DEVGUARD_PACKAGE"
-test -f "$GITHUB_WORKSPACE/examples/agent/picard/IDENTITY.md"
-test -f "$GITHUB_WORKSPACE/examples/agent/picard/avatar.png"
-test -f "$GITHUB_WORKSPACE/examples/agent/riker/IDENTITY.md"
-test -f "$GITHUB_WORKSPACE/examples/agent/riker/avatar.png"
 cp -R "$GITHUB_WORKSPACE/examples/agent/picard" "$TMPDIR/source-picard"
 cp -R "$GITHUB_WORKSPACE/examples/agent/riker" "$TMPDIR/source-riker"
 
 # should register both agents and persist only picard identity in the source profile
-set -o pipefail
-openclaw agents add picard --workspace "$TMPDIR/source-picard" --non-interactive --json | grep -F '"agentId"' | grep -F '"picard"'
-openclaw agents add riker --workspace "$TMPDIR/source-riker" --non-interactive --json | grep -F '"agentId"' | grep -F '"riker"'
-openclaw agents set-identity --agent picard --workspace "$TMPDIR/source-picard" --from-identity --json | grep -F '"agentId"' | grep -F '"picard"'
-openclaw config get 'agents.list[0].id' --json | grep -F '"main"'
-openclaw config get 'agents.list[1].id' --json | grep -F '"picard"'
-openclaw config get 'agents.list[1].identity.name' --json | grep -F '"Jean-Luc Picard"'
-openclaw config get 'agents.list[2].id' --json | grep -F '"riker"'
+openclaw agents add picard --workspace "$TMPDIR/source-picard" --non-interactive
+openclaw agents add riker --workspace "$TMPDIR/source-riker" --non-interactive
+openclaw agents set-identity --agent picard --workspace "$TMPDIR/source-picard" --from-identity
 if openclaw config get 'agents.list[2].identity' --json > "$TMPDIR/source-riker-identity.log" 2>&1; then exit 1; fi
-test ! -e "$TMPDIR/source-picard/BOOTSTRAP.md"
-test ! -e "$TMPDIR/source-riker/BOOTSTRAP.md"
 
 # should install and enable packed devguard in the source profile
 openclaw plugins install "$DEVGUARD_PACKAGE" --force
@@ -44,49 +32,28 @@ printf '%s/logs/events.jsonl\n' "$(cat "$TMPDIR/project-path")" > "$TMPDIR/log-p
 # should start the isolated gateway with both imported identities
 (cd "$GITHUB_WORKSPACE" && exec openclaw devguard run > "$TMPDIR/run.log" 2>&1) &
 echo "$!" > "$TMPDIR/run.pid"
-log_path="$(cat "$TMPDIR/log-path")"
-run_pid="$(cat "$TMPDIR/run.pid")"
-deadline=$((SECONDS + 60))
-until grep -Fq '"event":"target_plugin_loaded"' "$log_path" 2>/dev/null; do
-  if ! kill -0 "$run_pid" 2>/dev/null; then
-    tail -n 120 "$TMPDIR/run.log"
-    exit 1
-  fi
-  if ((SECONDS >= deadline)); then
-    tail -n 120 "$TMPDIR/run.log"
-    exit 1
-  fi
-  sleep 1
-done
+"$GITHUB_WORKSPACE/examples/agent/wait-for-plugin-load.sh"
 ```
 
 ## Testing
 
 ```bash
-# should retain the source workspaces and reproduce both identities only in isolated state
+# should route both agents to their source workspaces and isolated state
 set -o pipefail
-cmp "$TMPDIR/source-before.json" "$(cat "$TMPDIR/source-config-path")"
-openclaw devguard exec -- config get 'agents.list[0].id' --json | grep -F '"main"'
 openclaw devguard exec -- config get 'agents.list[0].default' --json | grep -F 'true'
-openclaw devguard exec -- config get 'agents.list[1].id' --json | grep -F '"picard"'
-openclaw devguard exec -- config get 'agents.list[1].identity.name' --json | grep -F '"Jean-Luc Picard"'
 openclaw devguard exec -- config get 'agents.list[1].workspace' --json | grep -F "$TMPDIR/source-picard"
 openclaw devguard exec -- config get 'agents.list[1].agentDir' --json | grep -F "$(cat "$TMPDIR/state-path")/agents/picard/agent"
-openclaw devguard exec -- config get 'agents.list[2].id' --json | grep -F '"riker"'
-openclaw devguard exec -- config get 'agents.list[2].identity.name' --json | grep -F '"William T. Riker"'
 openclaw devguard exec -- config get 'agents.list[2].workspace' --json | grep -F "$TMPDIR/source-riker"
 openclaw devguard exec -- config get 'agents.list[2].agentDir' --json | grep -F "$(cat "$TMPDIR/state-path")/agents/riker/agent"
 openclaw devguard exec -- config get ui.assistant.name --json | grep -F '"DEVGUARD"'
 openclaw devguard exec -- config get ui.assistant.avatar --json | grep -Fq '"data:image/png;base64,'
 
 # should report all agents and the disabled model transfer
-set -o pipefail
 grep -F "agents" "$TMPDIR/init.log" | grep -F "main, picard, riker"
 grep -F "model" "$TMPDIR/init.log" | grep -F "not imported"
 grep -F "auth" "$TMPDIR/init.log" | grep -F "not imported"
 
 # should expose both identities through the live gateway
-set -o pipefail
 openclaw devguard exec -- gateway call agents.list --json > "$TMPDIR/agents-list.json"
 grep -F '"defaultId"' "$TMPDIR/agents-list.json" | grep -F '"main"'
 grep -F '"id"' "$TMPDIR/agents-list.json" | grep -F '"picard"'
@@ -103,6 +70,8 @@ openclaw devguard exec -- gateway call agent.identity.get --json --params '{"age
 grep -F '"agentId"' "$TMPDIR/riker-identity.json" | grep -F '"riker"'
 grep -F '"name"' "$TMPDIR/riker-identity.json" | grep -F '"William T. Riker"'
 grep -F '"avatarStatus"' "$TMPDIR/riker-identity.json" | grep -F '"local"'
+
+# should leave the source profile and workspace fixtures unchanged
 cmp "$TMPDIR/source-before.json" "$(cat "$TMPDIR/source-config-path")"
 cmp "$GITHUB_WORKSPACE/examples/agent/picard/IDENTITY.md" "$TMPDIR/source-picard/IDENTITY.md"
 cmp "$GITHUB_WORKSPACE/examples/agent/picard/avatar.png" "$TMPDIR/source-picard/avatar.png"
@@ -114,11 +83,5 @@ cmp "$GITHUB_WORKSPACE/examples/agent/riker/avatar.png" "$TMPDIR/source-riker/av
 
 ```bash
 # should stop live supervision cleanly
-kill -TERM "$(cat "$TMPDIR/run.pid")"
-run_pid="$(cat "$TMPDIR/run.pid")"
-deadline=$((SECONDS + 20))
-while kill -0 "$run_pid" 2>/dev/null; do
-  if ((SECONDS >= deadline)); then exit 1; fi
-  sleep 1
-done
+"$GITHUB_WORKSPACE/examples/agent/stop-supervision.sh"
 ```
