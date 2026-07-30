@@ -19,6 +19,7 @@ import {
 } from '../lib/cli-output.ts';
 import waitForGatewayStatus, { type GatewayStatus } from '../lib/gateway-status.ts';
 import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
+import { OwnedProcessTimeoutError } from '../lib/owned-process.ts';
 import createProjectWatcher from '../lib/project-watcher.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
@@ -56,6 +57,17 @@ function unexpectedGatewayExit(exit: GatewayExit): Error {
     return new Error(`DevGuard Gateway exited unexpectedly with signal ${exit.signal}`);
   }
   return new Error(`DevGuard Gateway exited unexpectedly with code ${String(exit.code)}`);
+}
+
+function timeoutEventFields(error: unknown): Record<string, unknown> {
+  if (!(error instanceof OwnedProcessTimeoutError)) return {};
+  return {
+    timedOut: true,
+    timeoutMs: error.timeoutMs,
+    processId: error.cleanup.pid,
+    cleanupOutcome: error.cleanup.outcome,
+    cleanupSignals: error.cleanup.signals,
+  };
 }
 
 export default async function runDevguard(
@@ -108,9 +120,9 @@ export default async function runDevguard(
     resolveReady = resolvePromise;
     rejectReady = rejectPromise;
   });
-  let resolveGatewayFailure!: (error: Error) => void;
-  const gatewayFailure = new Promise<Error>((resolvePromise) => {
-    resolveGatewayFailure = resolvePromise;
+  let resolveSupervisionFailure!: (error: Error) => void;
+  const supervisionFailure = new Promise<Error>((resolvePromise) => {
+    resolveSupervisionFailure = resolvePromise;
   });
   const isolatedEnvironment = (): NodeJS.ProcessEnv =>
     isolatedOpenClawEnvironment(
@@ -134,6 +146,7 @@ export default async function runDevguard(
     startBuild: () =>
       spawn(config.plugin.build.command, config.plugin.build.args, {
         cwd: root,
+        detached: true,
         env: environment,
         stdio: 'inherit',
       }),
@@ -141,6 +154,7 @@ export default async function runDevguard(
       ? () =>
           spawn(validation.command, validation.args, {
             cwd: root,
+            detached: true,
             env: environment,
             stdio: 'inherit',
           })
@@ -152,10 +166,14 @@ export default async function runDevguard(
       }
       return spawn('openclaw', openClawProfileArguments(paths.profileName, args), {
         cwd: root,
+        detached: true,
         env: isolatedEnvironment(),
         stdio: 'inherit',
       });
     },
+    buildTimeoutMs: config.supervision.buildTimeoutSeconds * 1_000,
+    validationTimeoutMs: config.supervision.validationTimeoutSeconds * 1_000,
+    shutdownGraceMs: config.supervision.shutdownGraceSeconds * 1_000,
     onBuildStarted() {
       logDebug(options.logger, `build started for ${config.plugin.id}`);
       events.record({ event: 'build_started' });
@@ -177,7 +195,11 @@ export default async function runDevguard(
     },
     onValidationError(error) {
       const message = reportError(options.logger, 'plugin validation failed', error);
-      events.record({ event: 'plugin_validation_failed', error: message });
+      events.record({
+        event: 'plugin_validation_failed',
+        error: message,
+        ...timeoutEventFields(error),
+      });
       rejectReady(error);
     },
     onGatewayRestartRequested() {
@@ -256,7 +278,7 @@ export default async function runDevguard(
       const message = reportError(options.logger, 'Gateway startup failed', error);
       events.record({ event: 'gateway_start_failed', pluginBuildId: buildId, error: message });
       rejectReady(error);
-      resolveGatewayFailure(error instanceof Error ? error : new Error(String(error)));
+      resolveSupervisionFailure(error instanceof Error ? error : new Error(String(error)));
     },
     onGatewayExit(exit) {
       activeGatewayBuildId = undefined;
@@ -270,12 +292,25 @@ export default async function runDevguard(
         error: message,
       });
       rejectReady(error);
-      resolveGatewayFailure(error);
+      resolveSupervisionFailure(error);
     },
     onBuildError(error) {
       const message = reportError(options.logger, 'build failed', error);
-      events.record({ event: 'build_failed', error: message });
+      events.record({ event: 'build_failed', error: message, ...timeoutEventFields(error) });
       rejectReady(error);
+    },
+    onCleanupIncomplete(error) {
+      const message = reportError(options.logger, 'owned process cleanup failed', error);
+      events.record({
+        event: 'process_cleanup_incomplete',
+        error: message,
+        phase: error.cleanup.phase,
+        processId: error.cleanup.pid,
+        cleanupSignals: error.cleanup.signals,
+        detail: error.cleanup.detail,
+      });
+      rejectReady(error);
+      resolveSupervisionFailure(error);
     },
   });
 
@@ -366,7 +401,7 @@ export default async function runDevguard(
       });
       const gatewayError = await Promise.race([
         terminationSignal.then(() => undefined),
-        gatewayFailure,
+        supervisionFailure,
       ]);
       removeSignalListeners();
       if (gatewayError) throw gatewayError;

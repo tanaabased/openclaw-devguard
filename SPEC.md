@@ -12,9 +12,9 @@ This specification records durable product intent, exclusions, and remaining wor
 
 The current product has these public behaviors:
 
-- `init` creates or validates `devguard.json`, derives isolated OpenClaw state, imports selected agents and bounded model/authentication configuration, installs the target and DevGuard, and validates the result.
+- `init` creates or validates `devguard.json`, derives isolated OpenClaw state, imports selected agents and bounded model/authentication configuration, builds and validates within configured deadlines, installs the target and DevGuard, and validates the result.
 - `profile`, `exec`, and `shell` make native OpenClaw commands practical against initialized isolated state without requiring users to export profile or state selectors.
-- `run` acquires exclusive per-project ownership, diagnoses its loopback port without signaling another owner, then builds, validates, starts, verifies, watches, and replaces the target Gateway while retaining the last working Gateway after a replacement build or validation failure.
+- `run` acquires exclusive per-project ownership, diagnoses its loopback port without signaling another owner, then builds, validates, starts, verifies, watches, and replaces the target Gateway while retaining the last working Gateway after a replacement build or validation failure or timeout.
 - `tail` exposes human-readable or raw JSONL audit events, `doctor` aggregates live checks, and `restore` removes or restores only DevGuard-managed isolated state while preserving logs.
 - DevGuard's runtime policy activates only in a DevGuard-managed Gateway. Installing it in a normal profile exposes the CLI without guarding that profile's tools.
 - `probe` is the default policy. It replaces `exec` with a fixed recorder, preserves the real OpenClaw tool-result lifecycle, and tells the agent that the original command did not run.
@@ -89,6 +89,7 @@ The advertised host contract must follow exercised CI and operational evidence.
 - Windows is unsupported and must not be presented as compatible.
 - Every DevGuard command should fail before project discovery or host interaction on an unsupported host.
 - Platform-specific behavior includes permissions, paths, signals, child-process cleanup, and Gateway supervision.
+- Bounded build, validation, and Gateway processes use supported-host process groups, graceful-then-forceful shutdown, and verified cleanup. Deliberate session or process-group escape remains outside the ownership guarantee.
 
 ## Product Boundaries and Non-Goals
 
@@ -121,22 +122,11 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 
 ### Ranked backlog
 
-| Rank | Improvement                                    | Complexity | Impact | Leverage | Disposition |
-| ---: | ---------------------------------------------- | ---------- | ------ | -------- | ----------- |
-|    1 | Bounded build, validation, and process cleanup | M          | High   | Good     | Required    |
-|    2 | Native OpenClaw `approve` mode                 | L          | High   | Good     | Candidate   |
-|    3 | Explicit run-scoped `allow` mode               | L          | Medium | Fair     | Candidate   |
-|    4 | Additional exact-tool probes                   | M each     | Medium | Fair     | Candidate   |
-
-### Required reliability work
-
-#### Bounded build, validation, and process cleanup
-
-- Add bounded build and validation timeouts with useful defaults and explicit overrides.
-- Continue the existing graceful-then-forceful Gateway shutdown behavior.
-- Terminate owned process trees where supported host process-group behavior makes ownership reliable.
-- Preserve the last working Gateway after replacement build or validation failure.
-- Report incomplete cleanup without claiming CPU, memory, PID, filesystem, or general resource isolation.
+| Rank | Improvement                      | Complexity | Impact | Leverage | Disposition |
+| ---: | -------------------------------- | ---------- | ------ | -------- | ----------- |
+|    1 | Native OpenClaw `approve` mode   | L          | High   | Good     | Candidate   |
+|    2 | Explicit run-scoped `allow` mode | L          | Medium | Fair     | Candidate   |
+|    3 | Additional exact-tool probes     | M each     | Medium | Fair     | Candidate   |
 
 ### High-value candidates
 
@@ -173,7 +163,7 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 
 ## Stable Release Direction
 
-`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the remaining Required reliability item is completed.
+`1.0.0` does not require every candidate feature. The current isolated-profile, `probe`/`deny`, bounded supervision, audit, diagnostics, and restoration contract has no remaining Required backlog item; it must remain covered and truthful through release preparation.
 
 Any candidate mode included before `1.0.0` must have focused tests, CI-first operational evidence, accurate documentation, and fail-closed audit behavior. Unimplemented candidates must not appear in CLI help, accepted configuration, or user documentation as available functionality.
 

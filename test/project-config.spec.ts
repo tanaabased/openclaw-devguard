@@ -21,6 +21,11 @@ const validConfig = {
   policy: { mode: 'probe' },
   logging: { environmentValueAllowlist: ['NODE_ENV'] },
   gateway: { port: 19_001 },
+  supervision: {
+    buildTimeoutSeconds: 120,
+    validationTimeoutSeconds: 300,
+    shutdownGraceSeconds: 5,
+  },
 };
 
 describe('lib/project-config', () => {
@@ -32,6 +37,28 @@ describe('lib/project-config', () => {
     const legacyConfig: Record<string, unknown> = { ...validConfig };
     delete legacyConfig.policy;
     assert.equal(parseProjectConfig(legacyConfig).policy.mode, 'probe');
+  });
+
+  it('should apply supervision defaults to an older configuration', () => {
+    const legacyConfig: Record<string, unknown> = { ...validConfig };
+    delete legacyConfig.supervision;
+
+    assert.deepEqual(parseProjectConfig(legacyConfig).supervision, {
+      buildTimeoutSeconds: 120,
+      validationTimeoutSeconds: 300,
+      shutdownGraceSeconds: 5,
+    });
+  });
+
+  it('should reject supervision values outside their supported bounds', () => {
+    assert.throws(
+      () =>
+        parseProjectConfig({
+          ...validConfig,
+          supervision: { ...validConfig.supervision, shutdownGraceSeconds: 0 },
+        }),
+      /supervision\.shutdownGraceSeconds must be an integer between 1 and 60/,
+    );
   });
 
   it('should reject unknown keys instead of assuming permissive defaults', () => {
@@ -97,6 +124,11 @@ describe('lib/project-config', () => {
       });
       assert.deepEqual(config.plugin.watch, ['index.mjs', 'openclaw.plugin.json', 'package.json']);
       assert.equal(config.policy.mode, 'probe');
+      assert.deepEqual(config.supervision, {
+        buildTimeoutSeconds: 120,
+        validationTimeoutSeconds: 300,
+        shutdownGraceSeconds: 5,
+      });
     } finally {
       await rm(root, { force: true, recursive: true });
     }

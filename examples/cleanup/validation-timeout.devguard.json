@@ -7,19 +7,10 @@
       "args": ["run", "build"]
     },
     "validate": {
-      "command": "bun",
-      "args": ["run", "plugin:check"]
+      "command": "bash",
+      "args": ["examples/cleanup/conditional-validation.sh"]
     },
-    "watch": [
-      "cli",
-      "lib",
-      "scripts",
-      "utils",
-      "index.ts",
-      "openclaw.plugin.json",
-      "package.json",
-      "tsconfig.json"
-    ]
+    "watch": ["index.ts"]
   },
   "policy": {
     "mode": "probe"
@@ -32,7 +23,7 @@
   },
   "supervision": {
     "buildTimeoutSeconds": 120,
-    "validationTimeoutSeconds": 300,
-    "shutdownGraceSeconds": 5
+    "validationTimeoutSeconds": 1,
+    "shutdownGraceSeconds": 1
   }
 }

@@ -6,6 +6,9 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { resolveRequiredHomeDir } from 'openclaw/plugin-sdk/state-paths';
 
 export const DEVGUARD_PROJECT_FILE = 'devguard.json';
+export const DEFAULT_BUILD_TIMEOUT_SECONDS = 120;
+export const DEFAULT_VALIDATION_TIMEOUT_SECONDS = 300;
+export const DEFAULT_SHUTDOWN_GRACE_SECONDS = 5;
 
 export type DevguardPolicyMode = 'deny' | 'probe';
 
@@ -31,6 +34,11 @@ export interface DevguardProjectConfig {
   };
   gateway: {
     port: number;
+  };
+  supervision: {
+    buildTimeoutSeconds: number;
+    validationTimeoutSeconds: number;
+    shutdownGraceSeconds: number;
   };
 }
 
@@ -87,11 +95,18 @@ function commandConfig(value: unknown, path: string): DevguardProjectConfig['plu
   };
 }
 
+function integerInRange(value: unknown, path: string, minimum: number, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new TypeError(`${path} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return value;
+}
+
 export function parseProjectConfig(value: unknown): DevguardProjectConfig {
   const config = record(value, DEVGUARD_PROJECT_FILE);
   assertExactKeys(
     config,
-    ['version', 'plugin', 'policy', 'logging', 'gateway'],
+    ['version', 'plugin', 'policy', 'logging', 'gateway', 'supervision'],
     DEVGUARD_PROJECT_FILE,
   );
   if (config.version !== 1) throw new Error(`${DEVGUARD_PROJECT_FILE} version must be 1`);
@@ -115,14 +130,33 @@ export function parseProjectConfig(value: unknown): DevguardProjectConfig {
   assertExactKeys(logging, ['environmentValueAllowlist'], 'logging');
   const gateway = record(config.gateway, 'gateway');
   assertExactKeys(gateway, ['port'], 'gateway');
-  if (
-    typeof gateway.port !== 'number' ||
-    !Number.isInteger(gateway.port) ||
-    gateway.port < 1 ||
-    gateway.port > 65_535
-  ) {
-    throw new TypeError('gateway.port must be an integer between 1 and 65535');
-  }
+  const port = integerInRange(gateway.port, 'gateway.port', 1, 65_535);
+
+  const supervision =
+    config.supervision === undefined ? {} : record(config.supervision, 'supervision');
+  assertExactKeys(
+    supervision,
+    ['buildTimeoutSeconds', 'validationTimeoutSeconds', 'shutdownGraceSeconds'],
+    'supervision',
+  );
+  const buildTimeoutSeconds = integerInRange(
+    supervision.buildTimeoutSeconds ?? DEFAULT_BUILD_TIMEOUT_SECONDS,
+    'supervision.buildTimeoutSeconds',
+    1,
+    3_600,
+  );
+  const validationTimeoutSeconds = integerInRange(
+    supervision.validationTimeoutSeconds ?? DEFAULT_VALIDATION_TIMEOUT_SECONDS,
+    'supervision.validationTimeoutSeconds',
+    1,
+    3_600,
+  );
+  const shutdownGraceSeconds = integerInRange(
+    supervision.shutdownGraceSeconds ?? DEFAULT_SHUTDOWN_GRACE_SECONDS,
+    'supervision.shutdownGraceSeconds',
+    1,
+    60,
+  );
 
   return {
     version: 1,
@@ -139,7 +173,12 @@ export function parseProjectConfig(value: unknown): DevguardProjectConfig {
         'logging.environmentValueAllowlist',
       ),
     },
-    gateway: { port: gateway.port },
+    gateway: { port },
+    supervision: {
+      buildTimeoutSeconds,
+      validationTimeoutSeconds,
+      shutdownGraceSeconds,
+    },
   };
 }
 
@@ -246,6 +285,11 @@ export async function createProjectConfig(pluginRoot: string): Promise<DevguardP
     policy: { mode: 'probe' },
     logging: { environmentValueAllowlist: [] },
     gateway: { port: 19_001 },
+    supervision: {
+      buildTimeoutSeconds: DEFAULT_BUILD_TIMEOUT_SECONDS,
+      validationTimeoutSeconds: DEFAULT_VALIDATION_TIMEOUT_SECONDS,
+      shutdownGraceSeconds: DEFAULT_SHUTDOWN_GRACE_SECONDS,
+    },
   };
 }
 

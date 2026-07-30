@@ -427,6 +427,9 @@ export default async function initDevguard(
     cwd: pluginRoot,
     env: environment,
     inherit: true,
+    phase: 'build',
+    shutdownGraceMs: config.supervision.shutdownGraceSeconds * 1_000,
+    timeoutMs: config.supervision.buildTimeoutSeconds * 1_000,
   });
   if (config.plugin.validate) {
     logDebug(options.logger, `validating plugin ${config.plugin.id}`);
@@ -434,6 +437,9 @@ export default async function initDevguard(
       cwd: pluginRoot,
       env: environment,
       inherit: true,
+      phase: 'validation',
+      shutdownGraceMs: config.supervision.shutdownGraceSeconds * 1_000,
+      timeoutMs: config.supervision.validationTimeoutSeconds * 1_000,
     });
   }
 

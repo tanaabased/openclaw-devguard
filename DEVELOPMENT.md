@@ -147,7 +147,7 @@ The release-package check builds the plugin, validates its metadata, creates an 
 
 ### Leia Scenarios
 
-The [Leia](https://github.com/lando/leia) scenarios under [`examples/`](./examples/) run as matrix entries in the [example-test workflow](./.github/workflows/pr-examples-tests.yml) on macOS and Ubuntu. Most dogfood DevGuard's self-target path; the [`plugin`](./examples/plugin/) scenario owns the separate external-plugin boundary.
+The [Leia](https://github.com/lando/leia) scenarios under [`examples/`](./examples/) run as matrix entries in the [example-test workflow](./.github/workflows/pr-examples-tests.yml) on macOS and Ubuntu. Most dogfood DevGuard's self-target path; the [`plugin`](./examples/plugin/) scenario owns the separate external-plugin boundary, and [`cleanup`](./examples/cleanup/) exercises supported-host process-group ownership with deliberately hung descendants.
 
 > [!WARNING]
 > Leia scenarios install plugins, initialize OpenClaw profiles, start Gateways, invoke models, and remove generated state. They are designed for isolated GitHub Actions runners and should not be run as routine local validation.

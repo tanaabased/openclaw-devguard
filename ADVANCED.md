@@ -34,7 +34,11 @@ Initialization always makes `main` the isolated default agent. It also imports t
 
 `run` first acquires exclusive ownership of the target project and verifies that the configured loopback port is available without signaling its current owner. A second live supervisor is rejected with existing owner context. OpenClaw's public PID and process-start-time-aware file lock handles conservative stale recovery; DevGuard's adjacent private marker makes the active project, profile, port, and run inspectable. Ownership is released after normal or failed shutdown.
 
-After those checks, `run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard policy hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
+After those checks, `run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard policy hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed or timed-out replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
+
+Initialization and live supervision launch each bounded build and validation in an owned process group. `run` does the same for its Gateway. DevGuard verifies that the complete group is gone after the leader exits or when work is cancelled. On timeout or shutdown it sends `SIGTERM`, waits `supervision.shutdownGraceSeconds`, sends `SIGKILL` when necessary, and waits the same interval to verify removal. Incomplete cleanup is fatal and reports the phase and PID; live supervision also records the failure and stops rather than allowing overlapping work.
+
+This ownership is deliberately limited to ordinary descendants that remain in the launched process group on supported macOS and Linux hosts. A descendant that deliberately creates a new session or process group can escape that ownership, and DevGuard does not claim CPU, memory, PID, filesystem, or general resource isolation.
 
 DevGuard deliberately configures the isolated profile with:
 
@@ -60,13 +64,14 @@ After initialization, `profile`, `exec`, `shell`, `run`, `tail`, `doctor`, and `
 
 ### Common Values
 
-| Value       | Convention                                                                                                           |
-| ----------- | -------------------------------------------------------------------------------------------------------------------- |
-| Commands    | A non-empty executable name or path launched directly from the target root.                                          |
-| Arguments   | An ordered JSON array of strings passed to the command without shell interpolation.                                  |
-| Watch paths | Files or directories resolved relative to the target root. Every configured path must exist when supervision starts. |
-| Plugin IDs  | Non-empty OpenClaw plugin IDs. Keep the value aligned with `openclaw.plugin.json`.                                   |
-| Ports       | Integer TCP ports from `1` through `65535`. Concurrent targets need distinct ports.                                  |
+| Value       | Convention                                                                                                              |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Commands    | A non-empty executable name or path launched directly from the target root.                                             |
+| Arguments   | An ordered JSON array of strings passed to the command without shell interpolation.                                     |
+| Watch paths | Files or directories resolved relative to the target root. Every configured path must exist when supervision starts.    |
+| Plugin IDs  | Non-empty OpenClaw plugin IDs. Keep the value aligned with `openclaw.plugin.json`.                                      |
+| Ports       | Integer TCP ports from `1` through `65535`. Concurrent targets need distinct ports.                                     |
+| Seconds     | Positive whole seconds. Build and validation limits accept `1` through `3600`; shutdown grace accepts `1` through `60`. |
 
 A typical generated configuration is:
 
@@ -93,6 +98,11 @@ A typical generated configuration is:
   },
   "gateway": {
     "port": 19001
+  },
+  "supervision": {
+    "buildTimeoutSeconds": 120,
+    "validationTimeoutSeconds": 300,
+    "shutdownGraceSeconds": 5
   }
 }
 ```
@@ -216,6 +226,30 @@ Credential-shaped names remain fully redacted even when listed. This setting aff
 
 Sets the loopback port for the target's owned OpenClaw Gateway. DevGuard verifies that the port is available before starting any build, watcher, or Gateway work and reports an existing listener without killing or signaling it. The value is also used for Gateway startup, readiness checks, and `doctor`. Use a unique port for each target that may run concurrently.
 
+### `supervision.buildTimeoutSeconds`
+
+| Type    | Required | Default |
+| ------- | -------- | ------- |
+| integer | no       | `120`   |
+
+Bounds each build run by `init` or `run`. A timed-out initial build fails the command. A timed-out replacement build is recorded while the last working Gateway remains active, provided DevGuard verifies that the timed-out process group was removed.
+
+### `supervision.validationTimeoutSeconds`
+
+| Type    | Required | Default |
+| ------- | -------- | ------- |
+| integer | no       | `300`   |
+
+Bounds each configured `plugin.validate` run by `init` or `run`. It has the same initial-failure and replacement-preservation behavior as the build timeout.
+
+### `supervision.shutdownGraceSeconds`
+
+| Type    | Required | Default |
+| ------- | -------- | ------- |
+| integer | no       | `5`     |
+
+Controls owned-process cleanup. DevGuard waits up to this many seconds after graceful termination, then sends `SIGKILL` when the process group remains and waits up to the same interval to verify removal. This applies to superseded builds, validation, Gateway replacement, command timeout, and final shutdown.
+
 ## CLI Reference
 
 All commands are registered beneath `openclaw devguard` by the DevGuard plugin installed in the active OpenClaw profile.
@@ -275,7 +309,7 @@ Explicitly permits copying refreshable OAuth credentials that the provider has n
 
 #### Behavior
 
-Initialization creates `devguard.json` when missing and reuses a valid existing file. It derives a stable native OpenClaw profile and machine-local state path, snapshots pre-existing isolated configuration once, and refuses a previously unmanaged destination containing state that it cannot safely restore.
+Initialization creates `devguard.json` when missing and reuses a valid existing file. It derives a stable native OpenClaw profile and machine-local state path, snapshots pre-existing isolated configuration once, and refuses a previously unmanaged destination containing state that it cannot safely restore. Its build and optional validation use the configured supervision timeouts and owned-process cleanup contract.
 
 The isolated profile always includes `main` as its default agent. DevGuard also imports a differently configured source default and every remembered `--agent` selection. Later initialization runs preserve those selections and add any new `--agent` values unless `--reset-agents` first clears them. Each imported agent keeps its source workspace by reference, receives a new isolated agent directory, and starts without source sessions. Configured identities are copied; otherwise an available workspace `IDENTITY.md` is applied only to the isolated profile.
 
@@ -423,7 +457,7 @@ Builds and validates the target, starts and verifies the Gateway and active poli
 
 After preflight succeeds, `run` builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, policy mode, and active hook.
 
-Without `--once`, it watches every `plugin.watch` path until interrupted. A successful validated build replaces the current Gateway. A failed build or validation is recorded and leaves the last working Gateway running. An unexpected Gateway error, signal, or exit causes `run` to fail and clean up its watcher and child processes.
+Without `--once`, it watches every `plugin.watch` path until interrupted. A successful validated build replaces the current Gateway. A failed or timed-out build or validation is recorded and leaves the last working Gateway running after verified process cleanup. An unexpected Gateway error, signal, or exit causes `run` to fail and clean up its watcher and owned process groups. Cleanup that cannot be verified is fatal and reports the remaining PID instead of starting replacement work.
 
 The Gateway inherits the caller's environment, including environment-backed model credentials. DevGuard adds only the isolated OpenClaw selectors and its internal build, audit, target, diagnostics, and channel settings.
 
