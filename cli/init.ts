@@ -46,6 +46,7 @@ export interface InitDevguardOptions {
   platform?: NodeJS.Platform;
   profileImportDependencies?: ProfileImportDependencies;
   pluginRoot?: string;
+  resetAgents?: boolean;
 }
 
 export interface InitDevguardResult {
@@ -85,6 +86,14 @@ function importedAgentIds(marker: InitializationMarker | undefined): string[] {
     throw new TypeError('DevGuard initialization marker profileImport.agentIds must be strings');
   }
   return values;
+}
+
+export function initializationAgentIds(
+  rememberedAgentIds: readonly string[],
+  requestedAgentIds: readonly string[],
+  resetAgents: boolean,
+): string[] {
+  return [...(resetAgents ? [] : rememberedAgentIds), ...requestedAgentIds];
 }
 
 async function readInitializationMarker(
@@ -339,7 +348,11 @@ export default async function initDevguard(
   await assertRestorableDestination(paths.stateDirectory, existingMarker);
   const copyModelProfile = options.copyModelProfile !== false;
   const preparedProfileImport = prepareProfileImport({
-    agentIds: [...importedAgentIds(existingMarker), ...(options.agentIds ?? [])],
+    agentIds: initializationAgentIds(
+      importedAgentIds(existingMarker),
+      options.agentIds ?? [],
+      options.resetAgents === true,
+    ),
     copyModelProfile,
     dependencies: options.profileImportDependencies,
     destinationStateDirectory: paths.stateDirectory,

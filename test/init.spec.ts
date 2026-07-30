@@ -3,12 +3,22 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import initDevguard, { snapshotConfiguration } from '../cli/init.ts';
+import initDevguard, { initializationAgentIds, snapshotConfiguration } from '../cli/init.ts';
 import { type Logger } from '../lib/logger.ts';
 
 const logger: Logger = { info() {}, warn() {}, error() {} };
 
 describe('cli/init', () => {
+  it('should preserve or reset remembered agent selections before applying new ones', () => {
+    assert.deepEqual(initializationAgentIds(['main', 'picard'], ['riker'], false), [
+      'main',
+      'picard',
+      'riker',
+    ]);
+    assert.deepEqual(initializationAgentIds(['main', 'picard'], [], true), []);
+    assert.deepEqual(initializationAgentIds(['main', 'picard'], ['data'], true), ['data']);
+  });
+
   it('should reject an unsupported host before inspecting the plugin', async () => {
     await assert.rejects(
       initDevguard('/path/that/does/not/exist', { logger, platform: 'win32' }),

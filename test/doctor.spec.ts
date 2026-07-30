@@ -143,8 +143,9 @@ describe('cli/doctor', () => {
       await doctorDevguard(nested, doctorOptions(writes, passingStatus));
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 21);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 22);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
+      assert.match(writes[0] ?? '', /^agents\s+main$/m);
       assert.deepEqual(commands, [
         ['--profile', paths.profileName, 'config', 'get', 'gateway', '--json'],
         ['--profile', paths.profileName, 'config', 'get', 'tools', '--json'],

@@ -72,6 +72,7 @@ export default function registerDevguardCli(
     .command('init [plugin-path]')
     .description('Initialize DevGuard metadata for a plugin workspace.')
     .option('--agent <id>', 'Import an additional OpenClaw agent by id.', collectOption, [])
+    .option('--reset-agents', 'Forget remembered --agent selections before applying this command.')
     .option('--no-model-profile', 'Do not import model configuration or authentication.')
     .option('--copy-oauth', 'Copy refreshable OAuth credentials into isolated state.')
     .action(async (pluginPath: unknown, commandOptions: unknown) => {
@@ -79,6 +80,7 @@ export default function registerDevguardCli(
         agent?: string[];
         copyOauth?: boolean;
         modelProfile?: boolean;
+        resetAgents?: boolean;
       };
       await runCliAction(options.logger, 'initialization failed', async () => {
         await initDevguard(typeof pluginPath === 'string' ? pluginPath : '.', {
@@ -88,6 +90,7 @@ export default function registerDevguardCli(
           logger: options.logger,
           output,
           pluginRoot: options.pluginRoot,
+          resetAgents: flags.resetAgents,
         });
       });
     });

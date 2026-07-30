@@ -72,7 +72,7 @@ describe('lib/register-cli', () => {
     );
     assert.deepEqual(
       new Set(findCommand(devguard, 'init [plugin-path]').options),
-      new Set(['--agent <id>', '--no-model-profile', '--copy-oauth']),
+      new Set(['--agent <id>', '--reset-agents', '--no-model-profile', '--copy-oauth']),
     );
     assert.deepEqual(
       new Set(findCommand(devguard, 'run').options),

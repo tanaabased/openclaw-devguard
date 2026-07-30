@@ -257,6 +257,10 @@ Target plugin directory. Defaults to the current directory. The directory must c
 
 Imports another configured source agent by exact ID. Repeat the option for additional agents. Imported agent IDs are remembered in machine-local initialization state for later `init` runs.
 
+**`--reset-agents`**
+
+Forgets every remembered `--agent` selection before applying selections from the current command. Use it alone to return to the automatic agents, or combine it with one or more `--agent` options to replace the remembered selections. The automatic `main` and source default agents are unaffected.
+
 **`--no-model-profile`**
 
 Skips model configuration and authentication transfer. Selected agents, workspace references, and identities are still imported.
@@ -269,7 +273,7 @@ Explicitly permits copying refreshable OAuth credentials that the provider has n
 
 Initialization creates `devguard.json` when missing and reuses a valid existing file. It derives a stable native OpenClaw profile and machine-local state path, snapshots pre-existing isolated configuration once, and refuses a previously unmanaged destination containing state that it cannot safely restore.
 
-The isolated profile always includes `main` as its default agent. DevGuard also imports a differently configured source default and every `--agent` selection. Each imported agent keeps its source workspace by reference, receives a new isolated agent directory, and starts without source sessions. Configured identities are copied; otherwise an available workspace `IDENTITY.md` is applied only to the isolated profile.
+The isolated profile always includes `main` as its default agent. DevGuard also imports a differently configured source default and every remembered `--agent` selection. Later initialization runs preserve those selections and add any new `--agent` values unless `--reset-agents` first clears them. Each imported agent keeps its source workspace by reference, receives a new isolated agent directory, and starts without source sessions. Configured identities are copied; otherwise an available workspace `IDENTITY.md` is applied only to the isolated profile.
 
 Unless `--no-model-profile` is present, DevGuard projects each selected agent's effective primary model, fallbacks, referenced model entries, relevant provider configuration, and usable stored authentication. API keys and static tokens marked non-portable with `copyToAgents: false` are skipped. Provider-portable OAuth credentials are copied; other refreshable OAuth credentials require interactive confirmation or `--copy-oauth`. Existing isolated credentials win on profile-ID collisions.
 
@@ -287,6 +291,12 @@ openclaw devguard init .
 
 # add two named agents.
 openclaw devguard init . --agent ops --agent qa
+
+# forget previous selections and return to the automatic agents.
+openclaw devguard init . --reset-agents
+
+# replace previous selections with one named agent.
+openclaw devguard init . --reset-agents --agent ops
 
 # keep agent workspaces and identities without model or auth transfer.
 openclaw devguard init . --agent ops --no-model-profile

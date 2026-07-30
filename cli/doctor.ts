@@ -8,6 +8,7 @@ import { callGatewayFromCli } from 'openclaw/plugin-sdk/gateway-runtime';
 import {
   defaultCliOutput,
   formatCliError,
+  formatCliField,
   formatCliStatus,
   type CliOutput,
   type CliStyles,
@@ -285,15 +286,18 @@ export default async function doctorDevguard(
   if (options.json) {
     writeCliLines(output, [JSON.stringify({ ok: failed.length === 0, checks })]);
   } else {
-    writeCliLines(
-      output,
-      checks.map((check) => {
+    const importedAgents = profileImport.value;
+    writeCliLines(output, [
+      ...checks.map((check) => {
         const heading = check.ok
           ? formatCliStatus('pass', check.label, options.styles)
           : formatCliError('error', check.label, options.styles);
         return !check.ok && check.detail ? `${heading} ${check.detail}` : heading;
       }),
-    );
+      ...(importedAgents
+        ? [formatCliField('agents', importedAgents.join(', '), options.styles)]
+        : []),
+    ]);
   }
 
   for (const check of failed) {

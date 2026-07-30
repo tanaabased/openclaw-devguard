@@ -127,10 +127,9 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 |    2 | Single-supervisor ownership and port diagnostics | M          | High   | Excellent | Required    |
 |    3 | Bounded build, validation, and process cleanup   | M          | High   | Good      | Required    |
 |    4 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
-|    5 | Replace or clear imported agent selections       | S          | Medium | Excellent | Candidate   |
-|    6 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
-|    7 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
-|    8 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
+|    5 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
+|    6 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
+|    7 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
 
 ### Required reliability work
 
@@ -169,12 +168,6 @@ Gateway tokens and imported agent directories already request private modes. The
 - Deny on timeout, cancellation, missing approval routing, malformed resolution, or required audit failure.
 - Record request and resolution, then preserve the real approved, denied, failed, or completed OpenClaw lifecycle.
 - Require focused unit coverage and a CI-first operational scenario before describing the mode as supported.
-
-#### Imported agent selection management
-
-- Let a developer inspect, replace, or clear remembered machine-local agent IDs without restoring the entire project.
-- Keep agent selections out of `devguard.json`.
-- Make repeated `init` behavior explicit and avoid silently retaining an agent the developer asked to remove.
 
 #### Explicit `allow` mode
 
