@@ -82,6 +82,7 @@ describe('lib/register-cli', () => {
       new Set(findCommand(devguard, 'tail').options),
       new Set(['--json', '--no-follow']),
     );
+    assert.deepEqual(new Set(findCommand(devguard, 'doctor').options), new Set(['--json']));
   });
 
   it('should collect repeated agent options in command-line order', () => {

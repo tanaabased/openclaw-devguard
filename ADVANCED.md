@@ -476,14 +476,20 @@ Aggregates configuration, isolated-state, live runtime, and OpenClaw diagnostic 
 #### Usage
 
 ```sh
-openclaw devguard doctor
+openclaw devguard doctor [--json]
 ```
+
+#### Options
+
+**`--json`**
+
+Writes one newline-terminated JSON object to standard output with an overall `ok` value and the complete ordered `checks` array. Diagnostics remain separate from standard output.
 
 #### Behavior
 
 Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`.
 
-The command prints every check instead of stopping at the first failure. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
+The command prints every check instead of stopping at the first failure. Human mode renders the existing styled status list; JSON mode exposes the same check IDs, labels, results, ordering, and failure details. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
 
 ### `openclaw devguard restore`
 

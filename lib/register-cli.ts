@@ -171,9 +171,12 @@ export default function registerDevguardCli(
   devguard
     .command('doctor')
     .description('Inspect the current DevGuard development environment.')
-    .action(async () => {
+    .option('--json', 'Emit one machine-readable health report.')
+    .action(async (commandOptions: unknown) => {
+      const flags = (commandOptions ?? {}) as { json?: boolean };
       await runCliAction(options.logger, 'doctor failed', async () => {
         await doctorDevguard(process.cwd(), {
+          json: flags.json,
           logger: options.logger,
           output,
         });

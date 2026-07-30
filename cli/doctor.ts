@@ -41,6 +41,7 @@ type DoctorCommand = (
 
 export interface DoctorDevguardOptions {
   environment?: NodeJS.ProcessEnv;
+  json?: boolean;
   logger: Logger;
   output?: CliOutput;
   queryStatus?: (options: { token: string; url: string }) => Promise<unknown>;
@@ -278,15 +279,19 @@ export default async function doctorDevguard(
   });
   const failed = checks.filter((check) => !check.ok);
 
-  writeCliLines(
-    output,
-    checks.map((check) => {
-      const heading = check.ok
-        ? formatCliStatus('pass', check.label, options.styles)
-        : formatCliError('error', check.label, options.styles);
-      return !check.ok && check.detail ? `${heading} ${check.detail}` : heading;
-    }),
-  );
+  if (options.json) {
+    writeCliLines(output, [JSON.stringify({ ok: failed.length === 0, checks })]);
+  } else {
+    writeCliLines(
+      output,
+      checks.map((check) => {
+        const heading = check.ok
+          ? formatCliStatus('pass', check.label, options.styles)
+          : formatCliError('error', check.label, options.styles);
+        return !check.ok && check.detail ? `${heading} ${check.detail}` : heading;
+      }),
+    );
+  }
 
   for (const check of failed) {
     events.record({

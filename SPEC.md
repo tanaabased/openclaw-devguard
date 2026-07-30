@@ -129,10 +129,9 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 |    4 | Unsupported-host preflight and package contract  | S          | Medium | Excellent | Required    |
 |    5 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
 |    6 | Replace or clear imported agent selections       | S          | Medium | Excellent | Candidate   |
-|    7 | Structured `doctor --json` output                | S          | Medium | Excellent | Candidate   |
-|    8 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
-|    9 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
-|   10 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
+|    7 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
+|    8 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
+|    9 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
 
 ### Required reliability work
 
@@ -183,12 +182,6 @@ Gateway tokens and imported agent directories already request private modes. The
 - Let a developer inspect, replace, or clear remembered machine-local agent IDs without restoring the entire project.
 - Keep agent selections out of `devguard.json`.
 - Make repeated `init` behavior explicit and avoid silently retaining an agent the developer asked to remove.
-
-#### Structured doctor output
-
-- Add `doctor --json` using the same checks and result ordering as human output.
-- Keep standard output machine-readable and route diagnostics to standard error.
-- Do not create a second health model or remote API for the JSON representation.
 
 #### Explicit `allow` mode
 
