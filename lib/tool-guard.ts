@@ -112,7 +112,10 @@ function callKey(
 }
 
 export default function createToolGuard(options: ToolGuardOptions): {
-  captureToolCall: (event: BeforeToolCallEvent, context: ToolCallContext) => Promise<void>;
+  captureToolCall: (
+    event: BeforeToolCallEvent,
+    context: ToolCallContext,
+  ) => Promise<{ block: true; blockReason: string } | void>;
   applyToolPolicy: (
     event: BeforeToolCallEvent,
     context: ToolCallContext,
@@ -127,9 +130,7 @@ export default function createToolGuard(options: ToolGuardOptions): {
   const now = options.now ?? (() => new Date());
   const append = options.append ?? appendJsonl;
   const createProbeId = options.createProbeId ?? randomUUID;
-  const captureFailures = new Set<string>();
   const pendingProbes = new Map<string, string>();
-  let uncorrelatedCaptureFailure = false;
 
   if (policyMode === 'probe' && (!options.probeExecutablePath || !options.probeScriptPath)) {
     throw new Error('probe mode requires executable and recorder script paths');
@@ -248,23 +249,14 @@ export default function createToolGuard(options: ToolGuardOptions): {
           },
         ]);
       } catch (error) {
-        const key = callKey(event, context);
-        if (key) captureFailures.add(key);
-        else uncorrelatedCaptureFailure = true;
         options.onLogError?.(error);
-      }
-    },
-    async applyToolPolicy(event, context) {
-      const key = callKey(event, context);
-      const captureFailed = key ? captureFailures.delete(key) : uncorrelatedCaptureFailure;
-      if (!key) uncorrelatedCaptureFailure = false;
-      if (captureFailed) {
         return {
           block: true,
           blockReason: 'DevGuard audit logging failed; execution remains blocked.',
         };
       }
-
+    },
+    async applyToolPolicy(event, context) {
       if (policyMode !== 'probe' || event.toolName.toLowerCase() !== 'exec') {
         const reason =
           policyMode === 'deny'
@@ -298,6 +290,7 @@ export default function createToolGuard(options: ToolGuardOptions): {
           blockReason: 'DevGuard probe audit logging failed; execution remains blocked.',
         };
       }
+      const key = callKey(event, context);
       if (key) pendingProbes.set(key, probeId);
 
       return {

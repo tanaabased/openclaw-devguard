@@ -171,8 +171,9 @@ describe('lib/tool-guard', () => {
     assert.equal(guard.buildPromptContext(), undefined);
   });
 
-  it('should remain fail-closed when the append-only log cannot be written', async () => {
+  it('should block a failed uncorrelated capture without poisoning the next call', async () => {
     let loggedError: unknown;
+    let appendAttempts = 0;
     const guard = createToolGuard({
       pluginId: 'openclaw-devguard',
       buildId: 'build-123',
@@ -181,21 +182,28 @@ describe('lib/tool-guard', () => {
       probeExecutablePath: '/usr/bin/node',
       probeScriptPath: '/plugin/dist/exec-probe-task.js',
       append: async () => {
-        throw new Error('disk unavailable');
+        appendAttempts += 1;
+        if (appendAttempts === 1) throw new Error('disk unavailable');
       },
       onLogError: (error) => {
         loggedError = error;
       },
     });
 
-    const event = { toolName: 'exec', params: {}, toolCallId: 'call-4' };
+    const event = { toolName: 'exec', params: {} };
     const context = { toolName: 'exec' };
 
-    await guard.captureToolCall(event, context);
-    const result = await guard.applyToolPolicy(event, context);
+    const result = await guard.captureToolCall(event, context);
 
-    assert.ok('block' in result);
-    assert.match(result.blockReason, /logging failed/i);
+    assert.deepEqual(result, {
+      block: true,
+      blockReason: 'DevGuard audit logging failed; execution remains blocked.',
+    });
     assert.match(String(loggedError), /disk unavailable/);
+
+    const nextEvent = { toolName: 'exec', params: {} };
+    assert.equal(await guard.captureToolCall(nextEvent, context), undefined);
+    const nextResult = await guard.applyToolPolicy(nextEvent, context);
+    assert.ok('params' in nextResult);
   });
 });

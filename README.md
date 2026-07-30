@@ -47,66 +47,29 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md#install-from-source) when installing a lin
 
 ## Usage
 
-In terminal 1, initialize the OpenClaw plugin you want to develop and start its supervised Gateway:
+Initialize the OpenClaw plugin you want to develop, then verify one complete supervised startup:
 
-`init` creates or reuses the project-owned `devguard.json`. Agent selections and OAuth consent remain machine-local. Model configuration and portable stored authentication are imported by default, while environment-backed credentials are inherited without being copied; model and authentication transfer can be skipped with `--no-model-profile`.
+`init` creates or reuses the project-owned `devguard.json` and prepares isolated OpenClaw state. It imports the automatic agents, model configuration, and portable stored authentication by default; use `--no-model-profile` when model and authentication transfer are not needed.
 
 ```sh
 cd /path/to/my-openclaw-plugin
-
-# replace my-agent with an agent configured in your normal openclaw profile.
-openclaw devguard init . --agent my-agent
-
-# before starting the gateway, add DEVGUARD_EXAMPLE to
-# logging.environmentValueAllowlist in the generated devguard.json.
-
-# confirm one build, gateway startup, and live policy hook, then stop.
+openclaw devguard init .
 openclaw devguard run --once
+```
 
-# start the watched development gateway.
+`run --once` builds the target, runs any configured validation, starts the isolated Gateway, verifies the target build and DevGuard policy hook, then stops. For active development, keep the watched Gateway running in one terminal:
+
+```sh
 OPENCLAW_LOG_LEVEL=debug openclaw devguard run
 ```
 
-For example, add OpenClaw's `resolve_exec_env` hook inside the same target plugin's `register(api)` implementation. Saving the change causes `run` to rebuild, validate, and replace the Gateway:
-
-```ts
-api.on('resolve_exec_env', ({ host }) => {
-  api.logger.info(`adding DEVGUARD_EXAMPLE=1 to ${host} exec`);
-  return { DEVGUARD_EXAMPLE: '1' };
-});
-```
-
-In terminal 2, verify the isolated environment, ask the same imported agent to attempt one exec call, and inspect the resulting audit events:
+While `run` is active, check the isolated profile, target build, Gateway, and policy hook from another terminal:
 
 ```sh
-cd /path/to/my-openclaw-plugin
-
-# check the isolated profile, target build, gateway, and policy hook.
 openclaw devguard doctor
-
-# trigger the target plugin's exec-environment hook through the imported agent.
-openclaw devguard exec -- agent \
-  --agent my-agent \
-  --session-key devguard-example \
-  --message "Use the exec tool exactly once to run 'printenv DEVGUARD_EXAMPLE', then report the tool result without retrying." \
-  --json
-
-# read the attempted and probed tool-call records in human-readable form.
-openclaw devguard tail --no-follow
-
-# prove the hook-provided value reached the recorder while the original did not run.
-expected_sha256="$(printf '%s' '1' | shasum -a 256 | awk '{print $1}')"
-openclaw devguard tail --json --no-follow \
-  | grep -F '"event":"tool_call_probe_completed"' \
-  | grep -F '"originalCommandExecuted":false' \
-  | grep -F '"name":"DEVGUARD_EXAMPLE"' \
-  | grep -F "\"sha256\":\"$expected_sha256\""
-
-# stop run in terminal 1 with ctrl-c, then optionally remove managed state.
-openclaw devguard restore
 ```
 
-The hook runs while OpenClaw prepares the exec request, so its diagnostic appears in terminal 1. DevGuard then replaces `printenv` with its recorder; the original command does not execute. The completed probe record proves that the allowlisted hook-provided value reached the recorder without exposing its plaintext value. See [ADVANCED.md](./ADVANCED.md) for agent and model import, configuration, policy modes, logging, `exec` and `shell`, recovery, and the complete CLI contract.
+For a realistic end-to-end exercise with an imported agent, a target `resolve_exec_env` hook, and audit proof that the original command did not run, follow the [Real-World Agent Probe Example](./ADVANCED.md#real-world-agent-probe-example). See [ADVANCED.md](./ADVANCED.md) for agent and model import, configuration, policy modes, logging, `exec` and `shell`, recovery, and the complete CLI contract.
 
 ## Caveats
 

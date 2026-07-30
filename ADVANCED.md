@@ -56,6 +56,69 @@ Audit records are written as JSONL and contain correlated lifecycle and tool-pol
 
 `restore` reverses only DevGuard-managed isolated-profile state. It does not change the normal source profile, imported workspaces, target source, audit logs, or side effects performed directly by target plugin code.
 
+### Real-World Agent Probe Example
+
+This example builds on the [README usage flow](./README.md#usage) and exercises DevGuard through a real imported agent. It demonstrates that a target plugin can modify an exec environment through OpenClaw's public `resolve_exec_env` hook while DevGuard replaces the agent's requested command with its non-mutating recorder.
+
+Choose an agent with a working model and authentication in the source OpenClaw profile, then import it into the target's isolated state:
+
+```sh
+cd /path/to/my-openclaw-plugin
+openclaw devguard init . --agent my-agent
+```
+
+Add `DEVGUARD_EXAMPLE` to `logging.environmentValueAllowlist` in the generated `devguard.json`. This permits the completed probe record to contain a hash of the value while keeping its plaintext out of the audit log.
+
+Add the hook inside the target plugin's `register(api)` implementation:
+
+```ts
+api.on('resolve_exec_env', ({ host }) => {
+  api.logger.info(`adding DEVGUARD_EXAMPLE=1 to ${host} exec`);
+  return { DEVGUARD_EXAMPLE: '1' };
+});
+```
+
+Start the watched development Gateway in terminal 1. Saving later target changes causes `run` to rebuild, validate, and replace the Gateway:
+
+```sh
+OPENCLAW_LOG_LEVEL=debug openclaw devguard run
+```
+
+In terminal 2, verify the live environment, ask the imported agent to attempt one exec call, and inspect the resulting audit events:
+
+```sh
+cd /path/to/my-openclaw-plugin
+
+# check the isolated profile, target build, gateway, and policy hook.
+openclaw devguard doctor
+
+# trigger the target plugin's exec-environment hook through the imported agent.
+openclaw devguard exec -- agent \
+  --agent my-agent \
+  --session-key devguard-example \
+  --message "Use the exec tool exactly once to run 'printenv DEVGUARD_EXAMPLE', then report the tool result without retrying." \
+  --json
+
+# read the attempted and probed tool-call records in human-readable form.
+openclaw devguard tail --no-follow
+
+# prove the hook-provided value reached the recorder while the original did not run.
+expected_sha256="$(printf '%s' '1' | shasum -a 256 | awk '{print $1}')"
+openclaw devguard tail --json --no-follow \
+  | grep -F '"event":"tool_call_probe_completed"' \
+  | grep -F '"originalCommandExecuted":false' \
+  | grep -F '"name":"DEVGUARD_EXAMPLE"' \
+  | grep -F "\"sha256\":\"$expected_sha256\""
+```
+
+The hook diagnostic appears in terminal 1 while OpenClaw prepares the exec request. DevGuard then runs its recorder instead of `printenv`; the completed probe record proves that the hook-provided value reached the recorder without exposing the plaintext value or executing the original command.
+
+Stop `run` with Ctrl-C when finished. To remove the managed isolated state while preserving audit logs, run:
+
+```sh
+openclaw devguard restore
+```
+
 ## Configuration Reference
 
 `devguard.json` is DevGuard's sole public project configuration. `openclaw devguard init` creates it in the target root when it does not exist and validates the existing file on later runs. The schema is strict: unknown keys, missing required values, invalid types, and invalid ports fail instead of receiving permissive defaults.
