@@ -87,7 +87,7 @@ The advertised host contract must follow exercised CI and operational evidence.
 
 - macOS 26 and Ubuntu 24.04 are currently exercised.
 - Windows is unsupported and must not be presented as compatible.
-- Unsupported hosts should fail before DevGuard mutates project or profile state.
+- Every DevGuard command should fail before project discovery or host interaction on an unsupported host.
 - Platform-specific behavior includes permissions, paths, signals, child-process cleanup, and Gateway supervision.
 
 ## Product Boundaries and Non-Goals

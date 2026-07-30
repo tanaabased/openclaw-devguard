@@ -19,6 +19,13 @@ const config = {
 };
 
 describe('cli/exec', () => {
+  it('should reject an unsupported host before argument validation', async () => {
+    await assert.rejects(
+      execDevguard('/path/that/does/not/exist', [], { platform: 'win32' }),
+      /platform win32 is unsupported/,
+    );
+  });
+
   it('should run OpenClaw against initialized isolated state and preserve its exit code', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-exec-'));
     const environment = {

@@ -27,6 +27,7 @@ import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 interface Attempt<T> {
   error?: string;
@@ -44,6 +45,7 @@ export interface DoctorDevguardOptions {
   json?: boolean;
   logger: Logger;
   output?: CliOutput;
+  platform?: NodeJS.Platform;
   queryStatus?: (options: { token: string; url: string }) => Promise<unknown>;
   runCommand?: DoctorCommand;
   styles?: CliStyles;
@@ -106,6 +108,7 @@ export default async function doctorDevguard(
   projectRoot: string,
   options: DoctorDevguardOptions,
 ): Promise<void> {
+  assertSupportedHost(options.platform);
   const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);

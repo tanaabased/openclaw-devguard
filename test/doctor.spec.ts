@@ -22,6 +22,15 @@ const config = {
 };
 
 describe('cli/doctor', () => {
+  it('should reject an unsupported host before project discovery', async () => {
+    const logger: Logger = { info() {}, warn() {}, error() {} };
+
+    await assert.rejects(
+      doctorDevguard('/path/that/does/not/exist', { logger, platform: 'win32' }),
+      /platform win32 is unsupported/,
+    );
+  });
+
   it('should emit human and JSON reports from the same ordered checks', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-doctor-'));
     const devguardHome = join(root, 'home');

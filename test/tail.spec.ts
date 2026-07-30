@@ -21,6 +21,15 @@ const config = {
 };
 
 describe('cli/tail', () => {
+  it('should reject an unsupported host before project discovery', async () => {
+    const logger: Logger = { info() {}, warn() {}, error() {} };
+
+    await assert.rejects(
+      tailDevguard('/path/that/does/not/exist', { logger, platform: 'win32' }),
+      /platform win32 is unsupported/,
+    );
+  });
+
   it('should render human events and continue past malformed records', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-tail-'));
     const devguardHome = join(root, 'home');

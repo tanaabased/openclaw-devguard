@@ -19,6 +19,13 @@ const config = {
 };
 
 describe('cli/profile', () => {
+  it('should reject an unsupported host before project discovery', async () => {
+    await assert.rejects(
+      profileDevguard('/path/that/does/not/exist', { platform: 'win32' }),
+      /platform win32 is unsupported/,
+    );
+  });
+
   it('should print the initialized native OpenClaw profile name without decoration', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-profile-'));
     const environment = {

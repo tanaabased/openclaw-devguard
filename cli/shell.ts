@@ -4,6 +4,7 @@ import processCommand, {
   type ProcessCommandResult,
 } from '../lib/process-command.ts';
 import isolatedOpenClawEnvironment from '../utils/isolated-openclaw-environment.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 export type ShellCommandRunner = (
   command: string,
@@ -13,6 +14,7 @@ export type ShellCommandRunner = (
 
 export interface ShellDevguardOptions {
   environment?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
   runCommand?: ShellCommandRunner;
 }
 
@@ -20,6 +22,7 @@ export default async function shellDevguard(
   projectRoot: string,
   options: ShellDevguardOptions = {},
 ): Promise<number> {
+  assertSupportedHost(options.platform);
   const environment = options.environment ?? process.env;
   const { paths, root } = await loadInitializedProject(projectRoot, environment);
   const shell = environment.SHELL?.trim() || '/bin/sh';

@@ -58,6 +58,13 @@ async function createInitializedProject(shell = '/bin/zsh'): Promise<{
 }
 
 describe('cli/shell', () => {
+  it('should reject an unsupported host before project discovery', async () => {
+    await assert.rejects(
+      shellDevguard('/path/that/does/not/exist', { platform: 'win32' }),
+      /platform win32 is unsupported/,
+    );
+  });
+
   it('should open an inherited login shell in initialized isolated state', async () => {
     const fixture = await createInitializedProject();
     const calls: Parameters<ShellCommandRunner>[] = [];

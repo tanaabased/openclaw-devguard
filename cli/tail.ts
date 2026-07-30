@@ -9,6 +9,7 @@ import tailLogFile from '../lib/log-tail.ts';
 import { logWarn, type Logger } from '../lib/logger.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import runtimeEventDisplay from '../utils/runtime-event-display.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 export interface TailDevguardOptions {
   environment?: NodeJS.ProcessEnv;
@@ -16,6 +17,7 @@ export interface TailDevguardOptions {
   json?: boolean;
   logger: Logger;
   output?: CliOutput;
+  platform?: NodeJS.Platform;
   signal?: AbortSignal;
   styles?: CliStyles;
 }
@@ -32,6 +34,7 @@ export default async function tailDevguard(
   projectRoot: string,
   options: TailDevguardOptions,
 ): Promise<void> {
+  assertSupportedHost(options.platform);
   const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);

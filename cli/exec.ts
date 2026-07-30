@@ -6,6 +6,7 @@ import processCommand, {
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 export type ExecCommandRunner = (
   command: string,
@@ -15,6 +16,7 @@ export type ExecCommandRunner = (
 
 export interface ExecDevguardOptions {
   environment?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
   runCommand?: ExecCommandRunner;
 }
 
@@ -23,6 +25,7 @@ export default async function execDevguard(
   openClawArguments: readonly string[],
   options: ExecDevguardOptions = {},
 ): Promise<number> {
+  assertSupportedHost(options.platform);
   if (openClawArguments.length === 0) {
     throw new Error('OpenClaw command arguments are required after --');
   }
