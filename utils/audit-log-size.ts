@@ -46,6 +46,6 @@ export default async function warnIfAuditLogLarge(
   const sizeMiB = Math.ceil(size / MEBIBYTE_BYTES);
   logWarn(
     options.logger,
-    `audit log is ${sizeMiB} MiB at ${options.logPath}; DevGuard preserves logs and does not rotate them automatically`,
+    `audit log is ${sizeMiB} MiB at ${options.logPath}; stop any active openclaw devguard run, then archive or remove the file if you no longer need its history`,
   );
 }

@@ -53,7 +53,8 @@ describe('utils/audit-log-size', () => {
     assert.equal(warnings.length, 1);
     assert.match(warnings[0] ?? '', /audit log is 100 MiB/);
     assert.match(warnings[0] ?? '', /\/tmp\/events\.jsonl/);
-    assert.match(warnings[0] ?? '', /does not rotate/);
+    assert.match(warnings[0] ?? '', /stop any active openclaw devguard run/);
+    assert.match(warnings[0] ?? '', /archive or remove the file/);
   });
 
   it('should warn without failing when audit log inspection fails', async () => {

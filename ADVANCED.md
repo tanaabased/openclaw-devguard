@@ -46,8 +46,6 @@ This is a development guardrail, not arbitrary-code isolation. Target plugin imp
 
 Audit records are written as JSONL and contain correlated lifecycle and tool-policy events. DevGuard makes a best effort to obfuscate sensitive information, but it cannot identify every secret. Values under credential-shaped keys are replaced, and environment values are omitted unless their exact non-secret names appear in `logging.environmentValueAllowlist`; credential-shaped environment names remain fully redacted even when allowlisted. Ordinary tool arguments, including command text, derived paths, identifiers, and build metadata can remain visible. Treat audit logs as sensitive and avoid placing secrets in ordinary prompts or tool arguments.
 
-`run` and `doctor` emit a non-blocking diagnostic warning when the project audit log is at least 100 MiB. A missing log is normal. DevGuard preserves audit history and never deletes, truncates, or rotates the log implicitly.
-
 `restore` reverses only DevGuard-managed isolated-profile state. It does not change the normal source profile, imported workspaces, target source, audit logs, or side effects performed directly by target plugin code.
 
 ## Configuration Reference
@@ -407,7 +405,7 @@ Builds and validates the target, starts and verifies the Gateway and active poli
 
 #### Behavior
 
-`run` requires initialized state and its generated Gateway token. Before starting work, it warns when the existing audit log has reached the documented size threshold. It then builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, policy mode, and active hook.
+`run` requires initialized state and its generated Gateway token. It builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, policy mode, and active hook.
 
 Without `--once`, it watches every `plugin.watch` path until interrupted. A successful validated build replaces the current Gateway. A failed build or validation is recorded and leaves the last working Gateway running. An unexpected Gateway error, signal, or exit causes `run` to fail and clean up its watcher and child processes.
 
@@ -485,7 +483,7 @@ openclaw devguard doctor
 
 Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`.
 
-The command prints every check instead of stopping at the first failure. It also warns when the existing audit log has reached the documented size threshold. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
+The command prints every check instead of stopping at the first failure. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
 
 ### `openclaw devguard restore`
 
