@@ -39,7 +39,8 @@ function runtimeSettings(): {
 export default definePluginEntry({
   id: 'openclaw-devguard',
   name: 'OpenClaw DevGuard',
-  description: 'Development-time safety guardrails for OpenClaw plugin work.',
+  description:
+    'Develop OpenClaw plugins with reduced system impact, automatic builds, and reloads.',
   register(api) {
     api.registerCli(
       ({ logger, program }) => {
