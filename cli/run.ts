@@ -22,6 +22,7 @@ import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
 import createProjectWatcher from '../lib/project-watcher.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
+import warnIfAuditLogLarge from '../utils/audit-log-size.ts';
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
@@ -82,6 +83,7 @@ export default async function runDevguard(
     await readFile(join(paths.projectStateRoot, 'gateway-token'), 'utf8')
   ).trim();
   if (gatewayToken.length === 0) throw new Error('DevGuard isolated Gateway token is empty');
+  await warnIfAuditLogLarge({ logPath: paths.logPath, logger: options.logger });
   const gatewayUrl = `ws://127.0.0.1:${config.gateway.port}`;
 
   let buildSequence = 0;

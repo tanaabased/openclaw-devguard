@@ -133,7 +133,6 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 |    8 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
 |    9 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
 |   10 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
-|   11 | Audit-log size warnings                          | S          | Low    | Good      | Candidate   |
 
 ### Required reliability work
 
@@ -209,7 +208,6 @@ Gateway tokens and imported agent directories already request private modes. The
 ### Lower-priority candidates
 
 - **OpenClaw compatibility diagnostics:** detect changed public hooks, status fields, and runtime-inspection contracts with actionable errors. Existing runtime inspection and plugin diagnostics make this useful but not yet a release gate.
-- **Audit-log size warnings:** warn through `run` and `doctor` at a documented threshold without deleting, truncating, or rotating logs implicitly.
 
 ### Deprioritized work
 
