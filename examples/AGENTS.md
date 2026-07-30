@@ -9,7 +9,7 @@ This file applies to `examples/**`. Scenario README files are executable Leia sp
 - Keep executable commands inside the `Setup` and `Testing` fenced blocks.
 - Prefer checked-in fixtures over README commands or helper scripts that synthesize static, deterministic input state.
 - Keep scenario-owned fixtures directly beside their README; do not add a scenario-local `fixtures/` directory when the scenario directory already establishes ownership.
-- Hoist inputs to root `fixtures/` only when they are shared across multiple examples or explicitly established for concrete near-term shared use.
+- Hoist inputs to root `fixtures/` only after they are shared across two or more live examples.
 - Reuse a repository-owned product asset directly when it is itself the test input; do not duplicate it as an example-only fixture.
 - Keep real product registration, onboarding, and mutation commands when their supported behavior is part of the scenario contract; use fixtures to prepare inputs, not to bypass the public surface under test.
 - Use the fresh runner's default OpenClaw profile for source setup unless named-profile behavior is itself under test.

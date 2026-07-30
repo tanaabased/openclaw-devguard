@@ -57,26 +57,34 @@ try {
     'openclaw.plugin.json',
     'dist/index.js',
     'dist/index.js.map',
+    'dist/exec-probe-task.js',
+    'dist/exec-probe-task.js.map',
     'index.ts',
     'cli/doctor.ts',
+    'cli/exec.ts',
     'cli/init.ts',
+    'cli/profile.ts',
     'cli/restore.ts',
     'cli/run.ts',
+    'cli/shell.ts',
     'cli/tail.ts',
     'lib/cli-output.ts',
     'lib/logger.ts',
     'lib/register-cli.ts',
+    'assets/devbot.png',
+    'assets/devguard-small.png',
     'README.md',
     'ADVANCED.md',
     'DEVELOPMENT.md',
     'CHANGELOG.md',
     'LICENSE',
-    'assets/openclaw.png',
   ];
   for (const path of requiredPaths) {
     assert.equal(packedPaths.has(path), true, `packed plugin is missing ${path}`);
   }
-  assert.equal(packedPaths.has('SPEC.md'), false, 'packed plugin must exclude SPEC.md');
+  for (const path of ['assets/devguard.png', 'assets/openclaw.png', 'SPEC.md']) {
+    assert.equal(packedPaths.has(path), false, `packed plugin must exclude ${path}`);
+  }
 
   assert.match(packageResult.filename, /\.tgz$/);
   await access(join(temporaryRoot, packageResult.filename));

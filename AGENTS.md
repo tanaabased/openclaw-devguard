@@ -28,7 +28,7 @@
 
 - Keep `README.md` focused on installation, the common target-plugin path, and first verification.
 - Put complete CLI, configuration, logging, and operational detail in `ADVANCED.md`.
-- Put contributor setup, validation, dogfooding, and release mechanics in `DEVELOPMENT.md`.
+- Put source installation, dogfooding, validation, and coding standards in `DEVELOPMENT.md`.
 - Treat `SPEC.md` as product intent and `CHANGELOG.md` as the record of implemented changes.
 
 ## OpenClaw integration
