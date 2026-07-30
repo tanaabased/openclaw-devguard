@@ -7,6 +7,7 @@ import pluginMetadataFailures, {
 
 const packageMetadata: PackageMetadata = {
   name: '@tanaab/openclaw-devguard',
+  os: ['darwin', 'linux'],
   version: 'test-version',
   openclaw: {
     extensions: ['./index.ts'],
@@ -38,6 +39,7 @@ describe('utils/plugin-metadata-failures', () => {
       new Set(pluginMetadataFailures({}, {}).map(({ code }) => code)),
       new Set([
         'package-name',
+        'supported-os',
         'plugin-id',
         'source-entry',
         'runtime-entry',
@@ -46,6 +48,18 @@ describe('utils/plugin-metadata-failures', () => {
         'config-schema-type',
         'config-schema-strictness',
       ]),
+    );
+  });
+
+  it('should reject a package that advertises an unsupported host', () => {
+    assert.deepEqual(
+      pluginMetadataFailures({ ...packageMetadata, os: ['darwin', 'linux', 'win32'] }, manifest),
+      [
+        {
+          code: 'supported-os',
+          message: 'npm package must support exactly macOS and Linux',
+        },
+      ],
     );
   });
 

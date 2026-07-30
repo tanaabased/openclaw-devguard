@@ -27,6 +27,7 @@ import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 const DEFAULT_GATEWAY_STARTUP_TIMEOUT_MS = 60_000;
 
@@ -35,6 +36,7 @@ export interface RunDevguardOptions {
   logger: Logger;
   once?: boolean;
   output?: CliOutput;
+  platform?: NodeJS.Platform;
   unsafeRawStream?: boolean;
   startupTimeoutMs?: number;
 }
@@ -53,6 +55,7 @@ export default async function runDevguard(
   projectRoot: string,
   options: RunDevguardOptions,
 ): Promise<GatewayStatus> {
+  assertSupportedHost(options.platform);
   const root = await findProjectRoot(projectRoot);
   const config = await readProjectConfig(root);
   const environment = options.environment ?? process.env;

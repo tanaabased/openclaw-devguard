@@ -31,6 +31,13 @@ async function exists(path: string): Promise<boolean> {
 }
 
 describe('cli/restore', () => {
+  it('should reject an unsupported host before project discovery', async () => {
+    await assert.rejects(
+      restoreDevguard('/path/that/does/not/exist', { logger, platform: 'win32' }),
+      /platform win32 is unsupported/,
+    );
+  });
+
   it('should restore the original config, remove temporary state, and preserve logs', async () => {
     const root = await mkdtemp(join(tmpdir(), 'devguard-restore-'));
     const devguardHome = join(root, 'home');

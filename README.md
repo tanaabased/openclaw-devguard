@@ -116,7 +116,7 @@ The hook runs while OpenClaw prepares the exec request, so its diagnostic appear
 - Profile import is intentionally incomplete. DevGuard copies bounded model configuration and portable authentication, references selected agent workspaces, and uses isolated agent and session state without copying source sessions, channels, bindings, or browser state.
 - Sensitive-data obfuscation is best effort. Audit logs can retain ordinary prompts, command text, paths, identifiers, and other values that do not look like credentials, so treat them as sensitive.
 - `restore` removes only DevGuard-managed isolated state. It cannot reverse changes made directly by target-plugin code and does not remove imported workspaces, target source, or audit logs.
-- CI currently exercises macOS 26 and Ubuntu 24.04. Windows is not supported or exercised.
+- DevGuard supports macOS and Linux. CI currently exercises macOS 26 and Ubuntu 24.04; Windows and other hosts are not supported.
 
 ## Development
 

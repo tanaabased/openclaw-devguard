@@ -14,11 +14,13 @@ import { type Logger, reportError } from '../lib/logger.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
 import parseRestoreMarker, { type RestoreMarker } from '../utils/restore-marker.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 export interface RestoreDevguardOptions {
   environment?: NodeJS.ProcessEnv;
   logger: Logger;
   output?: CliOutput;
+  platform?: NodeJS.Platform;
 }
 
 export interface RestoreDevguardResult {
@@ -65,6 +67,7 @@ export default async function restoreDevguard(
   projectRoot: string,
   options: RestoreDevguardOptions,
 ): Promise<RestoreDevguardResult> {
+  assertSupportedHost(options.platform);
   const root = await findProjectRoot(projectRoot);
   const environment = options.environment ?? process.env;
   const config = await readProjectConfig(root);

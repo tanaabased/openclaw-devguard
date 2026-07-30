@@ -126,12 +126,11 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 |    1 | Private DevGuard state and audit permissions     | M          | High   | Excellent | Required    |
 |    2 | Single-supervisor ownership and port diagnostics | M          | High   | Excellent | Required    |
 |    3 | Bounded build, validation, and process cleanup   | M          | High   | Good      | Required    |
-|    4 | Unsupported-host preflight and package contract  | S          | Medium | Excellent | Required    |
-|    5 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
-|    6 | Replace or clear imported agent selections       | S          | Medium | Excellent | Candidate   |
-|    7 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
-|    8 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
-|    9 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
+|    4 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
+|    5 | Replace or clear imported agent selections       | S          | Medium | Excellent | Candidate   |
+|    6 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
+|    7 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
+|    8 | OpenClaw compatibility diagnostics               | M          | Medium | Good      | Candidate   |
 
 ### Required reliability work
 
@@ -159,12 +158,6 @@ Gateway tokens and imported agent directories already request private modes. The
 - Terminate owned process trees where supported host process-group behavior makes ownership reliable.
 - Preserve the last working Gateway after replacement build or validation failure.
 - Report incomplete cleanup without claiming CPU, memory, PID, filesystem, or general resource isolation.
-
-#### Unsupported-host preflight and package contract
-
-- Make package metadata and runtime preflight match the advertised host list.
-- Fail before `init`, `run`, or `restore` mutates state on unsupported hosts.
-- Exercise permissions, paths, signals, ownership, and Gateway supervision on every advertised host.
 
 ### High-value candidates
 
@@ -211,7 +204,7 @@ Gateway tokens and imported agent directories already request private modes. The
 
 ## Stable Release Direction
 
-`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the four Required reliability items are completed.
+`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the three Required reliability items are completed.
 
 Any candidate mode included before `1.0.0` must have focused tests, CI-first operational evidence, accurate documentation, and fail-closed audit behavior. Unimplemented candidates must not appear in CLI help, accepted configuration, or user documentation as available functionality.
 

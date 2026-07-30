@@ -30,6 +30,7 @@ import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
 import parseRestoreMarker from '../utils/restore-marker.ts';
+import assertSupportedHost from '../utils/supported-host.ts';
 
 const DEVGUARD_ASSISTANT_NAME = 'DEVGUARD';
 const DEVGUARD_AVATAR_DATA_URI_PREFIX = 'data:image/png;base64,';
@@ -42,6 +43,7 @@ export interface InitDevguardOptions {
   environment?: NodeJS.ProcessEnv;
   logger: Logger;
   output?: CliOutput;
+  platform?: NodeJS.Platform;
   profileImportDependencies?: ProfileImportDependencies;
   pluginRoot?: string;
 }
@@ -313,6 +315,7 @@ export default async function initDevguard(
   pluginPath = '.',
   options: InitDevguardOptions,
 ): Promise<InitDevguardResult> {
+  assertSupportedHost(options.platform);
   if (!options.pluginRoot) {
     throw new Error('DevGuard could not resolve its installed plugin root');
   }

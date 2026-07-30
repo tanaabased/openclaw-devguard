@@ -71,6 +71,7 @@ try {
     'lib/cli-output.ts',
     'lib/logger.ts',
     'lib/register-cli.ts',
+    'utils/supported-host.ts',
     'assets/devbot.png',
     'assets/devguard-small.png',
     'README.md',

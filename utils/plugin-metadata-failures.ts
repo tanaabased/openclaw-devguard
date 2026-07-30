@@ -1,8 +1,11 @@
+import { SUPPORTED_HOST_PLATFORMS } from './supported-host.ts';
+
 export interface PackageMetadata {
   engines?: {
     node?: string;
   };
   name?: string;
+  os?: string[];
   version?: string;
   openclaw?: {
     extensions?: string[];
@@ -24,6 +27,7 @@ export interface PluginManifest {
 
 export type PluginMetadataFailureCode =
   | 'package-name'
+  | 'supported-os'
   | 'plugin-id'
   | 'version-mismatch'
   | 'source-entry'
@@ -51,6 +55,12 @@ export default function pluginMetadataFailures(
     packageMetadata.name === '@tanaab/openclaw-devguard',
     'package-name',
     'unexpected npm package name',
+  );
+  check(
+    packageMetadata.os?.length === SUPPORTED_HOST_PLATFORMS.length &&
+      SUPPORTED_HOST_PLATFORMS.every((platform) => packageMetadata.os?.includes(platform)),
+    'supported-os',
+    'npm package must support exactly macOS and Linux',
   );
   check(manifest.id === 'openclaw-devguard', 'plugin-id', 'unexpected OpenClaw plugin id');
   check(
