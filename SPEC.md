@@ -334,6 +334,13 @@ Default mode.
 - tell the agent that the original operation did not run and no original side effects occurred
 - deny tools without an implemented non-mutating probe
 
+Filesystem probes, if implemented, must be explicit adapters for exact built-in tool identities.
+They may redirect a call only to disposable DevGuard-owned state, use sanitized fixed content, and
+report the real result of that controlled operation while making clear that the requested path and
+content were not accessed or changed. DevGuard must deny filesystem tools without such an adapter
+and must not describe these probes as filesystem isolation: direct target-plugin filesystem access
+remains outside the tool-call policy boundary.
+
 #### `deny`
 
 Explicit terminal-denial mode.
