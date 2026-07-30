@@ -52,6 +52,47 @@ function check(id: string, label: string, ok: boolean, detail?: string): DoctorC
   return { id, label, ok, ...(detail ? { detail } : {}) };
 }
 
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  if (value === null || Array.isArray(value) || typeof value !== 'object') return undefined;
+  return value as Record<string, unknown>;
+}
+
+function configuredModelRefs(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  const model = recordValue(value);
+  if (!model) return [];
+  const fallbacks = Array.isArray(model.fallbacks)
+    ? model.fallbacks.filter((fallback): fallback is string => typeof fallback === 'string')
+    : [];
+  return [...(typeof model.primary === 'string' ? [model.primary] : []), ...fallbacks];
+}
+
+function incompatibleOpenAiRuntimeRefs(
+  stateConfig: unknown,
+  importedAgentIds: readonly string[],
+): string[] {
+  const defaults = recordValue(nestedValue(stateConfig, ['agents', 'defaults']));
+  const defaultModels = recordValue(defaults?.models);
+  const configuredAgents = nestedValue(stateConfig, ['agents', 'list']);
+  if (!Array.isArray(configuredAgents)) return [];
+
+  return [
+    ...new Set(
+      configuredAgents.flatMap((value) => {
+        const agent = recordValue(value);
+        if (!agent || typeof agent.id !== 'string' || !importedAgentIds.includes(agent.id))
+          return [];
+        const agentModels = recordValue(agent.models);
+        return configuredModelRefs(agent.model ?? defaults?.model).filter((ref) => {
+          if (!ref.startsWith('openai/')) return false;
+          const entry = recordValue(agentModels?.[ref] ?? defaultModels?.[ref]);
+          return nestedValue(entry, ['agentRuntime', 'id']) !== 'openclaw';
+        });
+      }),
+    ),
+  ];
+}
+
 /** Evaluates DevGuard-owned safety invariants without reimplementing OpenClaw diagnostics. */
 export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
   const status = input.gatewayStatus;
@@ -68,6 +109,7 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
   const execReachesGuard = nestedValue(stateConfig, ['tools', 'exec', 'mode']) === 'full';
   const configuredAgents = nestedValue(stateConfig, ['agents', 'list']);
   const importedAgentIds = input.importedAgentIds ?? [];
+  const incompatibleRuntimeRefs = incompatibleOpenAiRuntimeRefs(stateConfig, importedAgentIds);
   const agentStateIsolated =
     Array.isArray(configuredAgents) &&
     importedAgentIds.length > 0 &&
@@ -119,6 +161,12 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
     ),
     check('elevated-disabled', 'elevated disabled', elevatedDisabled),
     check('exec-pipeline-open', 'exec reaches guard', execReachesGuard, 'expected exec mode full'),
+    check(
+      'openai-runtime-compatible',
+      'openai tools use openclaw runtime',
+      incompatibleRuntimeRefs.length === 0,
+      incompatibleRuntimeRefs.join(', ') || undefined,
+    ),
     check('gateway-reachable', 'gateway reachable', status !== undefined, input.gatewayError),
     check(
       'profile-active',

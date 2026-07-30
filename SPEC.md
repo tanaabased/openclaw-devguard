@@ -121,6 +121,7 @@ Responsibilities:
 - resolve the source profile's default agent and optional repeated `--agent` selections
 - retain source workspaces while assigning isolated agent directories and empty sessions
 - import effective model selections and only their referenced provider configuration
+- route imported OpenAI models through the OpenClaw agent runtime required for non-mutating tool probes
 - copy portable stored authentication without persisting environment credentials
 - require explicit consent for OAuth credentials that do not declare portability
 - avoid importing channels, bindings, source sessions, or source tool-policy overrides

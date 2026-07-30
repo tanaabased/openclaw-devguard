@@ -168,6 +168,17 @@ function modelRefs(model: AgentModelConfig | undefined): string[] {
   return [...(model.primary ? [model.primary] : []), ...(model.fallbacks ?? [])];
 }
 
+function isolatedModelEntry(
+  ref: string,
+  entry: NonNullable<AgentEntry['models']>[string] | undefined,
+): NonNullable<AgentEntry['models']>[string] | undefined {
+  if (!ref.startsWith('openai/')) return entry ? structuredClone(entry) : undefined;
+  return {
+    ...(entry ? structuredClone(entry) : {}),
+    agentRuntime: { id: 'openclaw' },
+  };
+}
+
 function selectedModelEntries(
   config: OpenClawConfig,
   agentEntry: AgentEntry | undefined,
@@ -175,7 +186,10 @@ function selectedModelEntries(
 ): AgentEntry['models'] | undefined {
   const models = { ...config.agents?.defaults?.models, ...agentEntry?.models };
   const selected = Object.fromEntries(
-    refs.flatMap((ref) => (models[ref] ? [[ref, structuredClone(models[ref])]] : [])),
+    refs.flatMap((ref) => {
+      const entry = isolatedModelEntry(ref, models[ref]);
+      return entry ? [[ref, entry]] : [];
+    }),
   );
   return Object.keys(selected).length > 0 ? selected : undefined;
 }
@@ -215,8 +229,8 @@ function profileConfigPatch(
   );
   const defaultModelEntries = Object.fromEntries(
     allModelRefs.flatMap((ref) => {
-      const value = prepared.sourceConfig.agents?.defaults?.models?.[ref];
-      return value ? [[ref, structuredClone(value)]] : [];
+      const entry = isolatedModelEntry(ref, prepared.sourceConfig.agents?.defaults?.models?.[ref]);
+      return entry ? [[ref, entry]] : [];
     }),
   );
 

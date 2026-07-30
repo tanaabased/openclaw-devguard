@@ -39,7 +39,11 @@ describe('cli/doctor', () => {
       },
       tools: { exec: { host: 'gateway', mode: 'full' }, elevated: { enabled: false } },
       agents: {
-        defaults: { sandbox: { mode: 'off' } },
+        defaults: {
+          model: 'openai/gpt-test',
+          models: { 'openai/gpt-test': { agentRuntime: { id: 'openclaw' } } },
+          sandbox: { mode: 'off' },
+        },
         list: [{ id: 'main', agentDir: join(paths.stateDirectory, 'agents/main/agent') }],
       },
     };
@@ -105,10 +109,10 @@ describe('cli/doctor', () => {
           if (profileArgs[0] === 'config' && profileArgs[2] === 'tools') {
             return { code: 0, output: JSON.stringify(stateConfig.tools) };
           }
-          if (profileArgs[0] === 'config' && profileArgs[2] === 'agents.defaults.sandbox') {
+          if (profileArgs[0] === 'config' && profileArgs[2] === 'agents.defaults') {
             return {
               code: 0,
-              output: JSON.stringify(stateConfig.agents.defaults.sandbox),
+              output: JSON.stringify(stateConfig.agents.defaults),
             };
           }
           if (profileArgs[0] === 'config' && profileArgs[2] === 'agents.list') {
@@ -120,12 +124,12 @@ describe('cli/doctor', () => {
       });
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 20);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 21);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
       assert.deepEqual(commands, [
         ['--profile', paths.profileName, 'config', 'get', 'gateway', '--json'],
         ['--profile', paths.profileName, 'config', 'get', 'tools', '--json'],
-        ['--profile', paths.profileName, 'config', 'get', 'agents.defaults.sandbox', '--json'],
+        ['--profile', paths.profileName, 'config', 'get', 'agents.defaults', '--json'],
         ['--profile', paths.profileName, 'config', 'get', 'agents.list', '--json'],
         [
           '--profile',

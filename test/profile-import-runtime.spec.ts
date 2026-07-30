@@ -27,8 +27,15 @@ const sourceConfig: OpenClawConfig = {
       model: { primary: 'openai/model-main', fallbacks: ['other/model-fallback'] },
       workspace: '/source/workspaces',
       models: {
-        'openai/model-main': { alias: 'main-model' },
-        'other/model-fallback': { alias: 'fallback-model' },
+        'openai/model-main': {
+          alias: 'main-model',
+          agentRuntime: { id: 'codex' },
+          params: { temperature: 0 },
+        },
+        'other/model-fallback': {
+          alias: 'fallback-model',
+          agentRuntime: { id: 'claude-cli' },
+        },
       },
     },
     list: [
@@ -130,6 +137,23 @@ describe('lib/profile-import', () => {
       avatar: 'assets/ops.png',
     });
     assert.notEqual(patch.agents?.list?.[1]?.identity, sourceConfig.agents?.list?.[1]?.identity);
+    assert.deepEqual(patch.agents?.defaults?.models?.['openai/model-main'], {
+      alias: 'main-model',
+      agentRuntime: { id: 'openclaw' },
+      params: { temperature: 0 },
+    });
+    assert.deepEqual(patch.agents?.defaults?.models?.['other/model-fallback'], {
+      alias: 'fallback-model',
+      agentRuntime: { id: 'claude-cli' },
+    });
+    assert.deepEqual(patch.agents?.list?.[1]?.models?.['openai/model-ops'], {
+      agentRuntime: { id: 'openclaw' },
+    });
+    assert.deepEqual(sourceConfig.agents?.defaults?.models?.['openai/model-main'], {
+      alias: 'main-model',
+      agentRuntime: { id: 'codex' },
+      params: { temperature: 0 },
+    });
     assert.deepEqual(Object.keys(patch.models?.providers ?? {}).sort(), ['openai', 'other']);
     assert.equal(resolved.auth.copied, 2);
   });

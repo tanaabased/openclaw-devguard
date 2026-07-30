@@ -24,11 +24,13 @@ The absolute target path participates in the profile name and state key. Two che
 
 Agent selections and OAuth-copy consent are machine-local initialization state, not portable project policy, so they are not written to `devguard.json`. The normal source profile is read but not mutated. Imported workspaces remain references to their existing directories; DevGuard creates fresh isolated agent state and does not copy source sessions, channel bindings, browser state, or general OpenClaw configuration.
 
+Imported provider, model, and authentication selections remain unchanged. DevGuard does explicitly route imported `openai/*` model entries through OpenClaw's built-in agent runtime inside the isolated profile. OpenAI models otherwise default to the Codex runtime, whose native tool calls cannot accept the parameter rewrite required by DevGuard's non-mutating exec probe. Non-OpenAI runtime policy is preserved.
+
 Initialization always makes `main` the isolated default agent. It also imports the source profile's configured default agent when that is a different ID, plus every agent selected with `--agent`. Configured agent identities are projected into the isolated profile. When an agent has no configured identity but its workspace contains `IDENTITY.md`, DevGuard asks OpenClaw to set that identity only in the isolated profile. The fallback Control UI identity is `DEVGUARD` with the bundled DevGuard avatar, making the isolated Gateway visually distinct.
 
 ### Supervision And Safety
 
-`run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard deny hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
+`run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard policy hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
 
 DevGuard deliberately configures the isolated profile with:
 
@@ -38,7 +40,7 @@ DevGuard deliberately configures the isolated profile with:
 - ambient channels skipped for DevGuard-managed OpenClaw processes
 - a loopback Gateway protected by a generated token
 
-The permissive OpenClaw exec setting is transport configuration, not DevGuard policy. It allows model transport and tool requests to reach the plugin hook pipeline. DevGuard records each attempted tool call and then blocks it at its terminal `before_tool_call` hook, including exec, filesystem, read-only, unknown, and plugin-defined tools. Target pre-tool hooks can observe the attempt before the terminal deny. If audit logging fails, the call is still blocked.
+The permissive OpenClaw exec setting is transport configuration, not DevGuard policy. It allows model transport and tool requests to reach the plugin hook pipeline. In the default `probe` mode, DevGuard records each attempt, replaces an exec request with its non-mutating recorder, and denies tools without an implemented probe. Target pre-tool and exec-environment hooks still run, while the originally requested command does not. Explicit `deny` mode blocks every tool call. If audit logging fails, the call is blocked.
 
 This is a development guardrail, not arbitrary-code isolation. Target plugin imports, registration code, background workers, and direct Node.js filesystem or network access run in the Gateway process and are outside the tool hook. Imported workspaces are normal host paths. DevGuard does not provide command simulation, synthetic tool success, containers, VMs, or production policy enforcement. Use stronger host isolation for untrusted plugin code.
 

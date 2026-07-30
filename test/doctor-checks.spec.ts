@@ -11,7 +11,11 @@ const stateConfig = {
   },
   tools: { exec: { host: 'gateway', mode: 'full' }, elevated: { enabled: false } },
   agents: {
-    defaults: { sandbox: { mode: 'off' } },
+    defaults: {
+      model: 'openai/gpt-test',
+      models: { 'openai/gpt-test': { agentRuntime: { id: 'openclaw' } } },
+      sandbox: { mode: 'off' },
+    },
     list: [{ id: 'main', agentDir: '/devguard/state/agents/main/agent' }],
   },
 };
@@ -44,10 +48,45 @@ describe('utils/doctor-checks', () => {
       stateConfig,
     });
 
-    assert.equal(checks.length, 20);
+    assert.equal(checks.length, 21);
     assert.deepEqual(
       checks.filter(({ ok }) => !ok),
       [],
+    );
+  });
+
+  it('should reject an imported OpenAI model that bypasses the OpenClaw tool runtime', () => {
+    const checks = doctorChecks({
+      expectedPluginId: 'example-plugin',
+      expectedPolicyMode: 'probe',
+      expectedPort: 19_001,
+      expectedProfileName: 'devguard-example',
+      expectedStateDirectory: '/devguard/state',
+      importedAgentIds: ['main'],
+      initialized: true,
+      pluginDoctorOk: true,
+      productionStateDirectory: '/normal/state',
+      runtimeInspectionOk: true,
+      stateConfig: {
+        ...stateConfig,
+        agents: {
+          defaults: {
+            ...stateConfig.agents.defaults,
+            models: { 'openai/gpt-test': { agentRuntime: { id: 'codex' } } },
+          },
+          list: stateConfig.agents.list,
+        },
+      },
+    });
+
+    assert.deepEqual(
+      checks.find(({ id }) => id === 'openai-runtime-compatible'),
+      {
+        id: 'openai-runtime-compatible',
+        label: 'openai tools use openclaw runtime',
+        ok: false,
+        detail: 'openai/gpt-test',
+      },
     );
   });
 

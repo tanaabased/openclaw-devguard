@@ -125,7 +125,7 @@ export default async function doctorDevguard(
     marker,
     gatewayConfigResult,
     toolsConfigResult,
-    sandboxConfigResult,
+    agentDefaultsConfigResult,
     agentsConfigResult,
     manifest,
     log,
@@ -157,12 +157,7 @@ export default async function doctorDevguard(
     attempt(() =>
       runCommand(
         'openclaw',
-        openClawProfileArguments(paths.profileName, [
-          'config',
-          'get',
-          'agents.defaults.sandbox',
-          '--json',
-        ]),
+        openClawProfileArguments(paths.profileName, ['config', 'get', 'agents.defaults', '--json']),
         {
           allowFailure: true,
           env: isolatedEnvironment,
@@ -210,7 +205,7 @@ export default async function doctorDevguard(
 
   const gatewayConfig = commandJson(gatewayConfigResult);
   const toolsConfig = commandJson(toolsConfigResult);
-  const sandboxConfig = commandJson(sandboxConfigResult);
+  const agentDefaultsConfig = commandJson(agentDefaultsConfigResult);
   const agentsConfig = commandJson(agentsConfigResult);
   const profileImport = importedAgentIds(
     marker,
@@ -221,16 +216,16 @@ export default async function doctorDevguard(
   const stateConfig =
     gatewayConfig.value !== undefined &&
     toolsConfig.value !== undefined &&
-    sandboxConfig.value !== undefined &&
+    agentDefaultsConfig.value !== undefined &&
     agentsConfig.value !== undefined
       ? {
           gateway: gatewayConfig.value,
           tools: toolsConfig.value,
-          agents: { defaults: { sandbox: sandboxConfig.value }, list: agentsConfig.value },
+          agents: { defaults: agentDefaultsConfig.value, list: agentsConfig.value },
         }
       : undefined;
   const stateConfigError =
-    gatewayConfig.error ?? toolsConfig.error ?? sandboxConfig.error ?? agentsConfig.error;
+    gatewayConfig.error ?? toolsConfig.error ?? agentDefaultsConfig.error ?? agentsConfig.error;
 
   const queryStatus =
     options.queryStatus ??
