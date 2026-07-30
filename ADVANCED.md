@@ -18,7 +18,7 @@ isolated OpenClaw profile: imported agents + DevGuard + linked target
 owned Gateway: build verification + tool-call capture and policy
 ```
 
-The target repository owns and should normally commit `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, and logs. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
+The target repository owns and should normally commit `devguard.json`. DevGuard keeps machine-local state under `~/.openclaw-dev/devguard/projects/` by default, including its initialization marker, Gateway token, optional configuration snapshot, logs, and the private owner marker used while `run` is active. The isolated native profile lives at `~/.openclaw-devguard-<plugin>-<hash>/`. Set `DEVGUARD_HOME` to relocate DevGuard's machine-local metadata and logs; it does not relocate OpenClaw's native profile directory.
 
 DevGuard creates its canonical state, isolated agent, and log directories with owner-only permissions and creates tokens, markers, snapshots, isolated configuration, audit logs, and optional raw streams as owner-readable and owner-writable files. When it encounters an existing owned artifact, it removes group and other access without widening stricter owner permissions. It does not change the target repository, normal OpenClaw state, imported workspaces, or arbitrary parent directories.
 
@@ -32,7 +32,9 @@ Initialization always makes `main` the isolated default agent. It also imports t
 
 ### Supervision And Safety
 
-`run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard policy hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
+`run` first acquires exclusive ownership of the target project and verifies that the configured loopback port is available without signaling its current owner. A second live supervisor is rejected with existing owner context. OpenClaw's public PID and process-start-time-aware file lock handles conservative stale recovery; DevGuard's adjacent private marker makes the active project, profile, port, and run inspectable. Ownership is released after normal or failed shutdown.
+
+After those checks, `run` builds and optionally validates the target before starting its loopback, token-authenticated Gateway. It then verifies that the expected target build and DevGuard policy hook are live. Watched changes trigger another build; the active Gateway is replaced only after the new build and validation succeed. A failed replacement leaves the last working Gateway active. An unexpected active Gateway exit fails supervision instead of silently falling back.
 
 DevGuard deliberately configures the isolated profile with:
 
@@ -212,7 +214,7 @@ Credential-shaped names remain fully redacted even when listed. This setting aff
 | ------- | -------- | ------- |
 | integer | yes      | `19001` |
 
-Sets the loopback port for the target's owned OpenClaw Gateway. DevGuard passes the value to Gateway startup, readiness checks, and `doctor`. Use a unique port for each target that may run concurrently.
+Sets the loopback port for the target's owned OpenClaw Gateway. DevGuard verifies that the port is available before starting any build, watcher, or Gateway work and reports an existing listener without killing or signaling it. The value is also used for Gateway startup, readiness checks, and `doctor`. Use a unique port for each target that may run concurrently.
 
 ## CLI Reference
 
@@ -417,7 +419,9 @@ Builds and validates the target, starts and verifies the Gateway and active poli
 
 #### Behavior
 
-`run` requires initialized state and its generated Gateway token. It builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, policy mode, and active hook.
+`run` requires initialized state and its generated Gateway token. Before build, watch, or Gateway work, it acquires the target's private supervisor lock and checks the configured loopback port. A live owner or occupied port fails with corrective context; DevGuard never signals an unrelated port owner. A stale lock is recovered only through OpenClaw's PID and process-start-time-aware public lock contract.
+
+After preflight succeeds, `run` builds the target, executes `plugin.validate` when configured, starts OpenClaw Gateway under Node.js, and waits for DevGuard's `devguard.status` method to report the expected profile, state, build ID, policy mode, and active hook.
 
 Without `--once`, it watches every `plugin.watch` path until interrupted. A successful validated build replaces the current Gateway. A failed build or validation is recorded and leaves the last working Gateway running. An unexpected Gateway error, signal, or exit causes `run` to fail and clean up its watcher and child processes.
 
@@ -503,7 +507,7 @@ Writes one newline-terminated JSON object to standard output with an overall `ok
 
 #### Behavior
 
-Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, private permissions on existing canonical artifacts, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`. Runtime inspection validates that both DevGuard and the target are loaded through OpenClaw's public inspection contract, that the DevGuard CLI registration remains visible, and that OpenClaw reports no DevGuard compatibility warnings. The live status check also validates the DevGuard-owned response fields before evaluating their values, so changed OpenClaw integration contracts identify the malformed field.
+Run `doctor` while `run` is supervising the target. It checks initialization and profile identity, the matching project supervisor owner, configured port ownership, private permissions on existing canonical artifacts, separation from normal OpenClaw state, imported agents, OpenAI runtime compatibility, loopback token authentication, channels, Docker sandbox mode, elevated and exec transport settings, manifest identity, latest successful build, live Gateway status, active policy hook, runtime plugin inspection, and `openclaw plugins doctor`. When the Gateway is unreachable, the port check distinguishes an available port from an unrelated listener without signaling either. Runtime inspection validates that both DevGuard and the target are loaded through OpenClaw's public inspection contract, that the DevGuard CLI registration remains visible, and that OpenClaw reports no DevGuard compatibility warnings. The live status check also validates the DevGuard-owned response fields before evaluating their values, so changed OpenClaw integration contracts identify the malformed field.
 
 The command prints every check instead of stopping at the first failure. Human mode renders the existing styled status list; JSON mode exposes the same check IDs, labels, results, ordering, and failure details. It records failed or successful doctor events in the audit log and exits nonzero after reporting the complete set when any check fails.
 

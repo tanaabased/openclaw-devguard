@@ -14,7 +14,7 @@ The current product has these public behaviors:
 
 - `init` creates or validates `devguard.json`, derives isolated OpenClaw state, imports selected agents and bounded model/authentication configuration, installs the target and DevGuard, and validates the result.
 - `profile`, `exec`, and `shell` make native OpenClaw commands practical against initialized isolated state without requiring users to export profile or state selectors.
-- `run` builds, validates, starts, verifies, watches, and replaces the target Gateway while retaining the last working Gateway after a replacement build or validation failure.
+- `run` acquires exclusive per-project ownership, diagnoses its loopback port without signaling another owner, then builds, validates, starts, verifies, watches, and replaces the target Gateway while retaining the last working Gateway after a replacement build or validation failure.
 - `tail` exposes human-readable or raw JSONL audit events, `doctor` aggregates live checks, and `restore` removes or restores only DevGuard-managed isolated state while preserving logs.
 - DevGuard's runtime policy activates only in a DevGuard-managed Gateway. Installing it in a normal profile exposes the CLI without guarding that profile's tools.
 - `probe` is the default policy. It replaces `exec` with a fixed recorder, preserves the real OpenClaw tool-result lifecycle, and tells the agent that the original command did not run.
@@ -121,23 +121,14 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 
 ### Ranked backlog
 
-| Rank | Improvement                                      | Complexity | Impact | Leverage  | Disposition |
-| ---: | ------------------------------------------------ | ---------- | ------ | --------- | ----------- |
-|    1 | Single-supervisor ownership and port diagnostics | M          | High   | Excellent | Required    |
-|    2 | Bounded build, validation, and process cleanup   | M          | High   | Good      | Required    |
-|    3 | Native OpenClaw `approve` mode                   | L          | High   | Good      | Candidate   |
-|    4 | Explicit run-scoped `allow` mode                 | L          | Medium | Fair      | Candidate   |
-|    5 | Additional exact-tool probes                     | M each     | Medium | Fair      | Candidate   |
+| Rank | Improvement                                    | Complexity | Impact | Leverage | Disposition |
+| ---: | ---------------------------------------------- | ---------- | ------ | -------- | ----------- |
+|    1 | Bounded build, validation, and process cleanup | M          | High   | Good     | Required    |
+|    2 | Native OpenClaw `approve` mode                 | L          | High   | Good     | Candidate   |
+|    3 | Explicit run-scoped `allow` mode               | L          | Medium | Fair     | Candidate   |
+|    4 | Additional exact-tool probes                   | M each     | Medium | Fair     | Candidate   |
 
 ### Required reliability work
-
-#### Single-supervisor ownership and port diagnostics
-
-- Acquire an exclusive per-project marker before build, watch, or Gateway work begins.
-- Record enough identity to distinguish a live owner from a stale marker without trusting an arbitrary PID alone.
-- Reject a second live supervisor with an actionable message.
-- Diagnose an occupied configured port without killing or signaling an unrelated process.
-- Release ownership after normal shutdown and recover stale ownership conservatively.
 
 #### Bounded build, validation, and process cleanup
 
@@ -182,7 +173,7 @@ Additional probes remain in scope only as exact adapters for stable public tool 
 
 ## Stable Release Direction
 
-`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the two remaining Required reliability items are completed.
+`1.0.0` does not require every candidate feature. It requires the current isolated-profile, `probe`/`deny`, supervision, audit, diagnostics, and restoration contract to remain covered while the remaining Required reliability item is completed.
 
 Any candidate mode included before `1.0.0` must have focused tests, CI-first operational evidence, accurate documentation, and fail-closed audit behavior. Unimplemented candidates must not appear in CLI help, accepted configuration, or user documentation as available functionality.
 

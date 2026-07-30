@@ -8,6 +8,7 @@ import { createCliStyles } from '../lib/cli-output.ts';
 import { type GatewayStatus } from '../lib/gateway-status.ts';
 import { type Logger } from '../lib/logger.ts';
 import { resolveProjectPaths } from '../lib/project-config.ts';
+import { supervisorMarkerPath } from '../lib/supervisor-ownership.ts';
 
 const config = {
   version: 1,
@@ -40,6 +41,7 @@ describe('cli/doctor', () => {
     const markerPath = join(paths.projectStateRoot, 'init.json');
     const tokenPath = join(paths.projectStateRoot, 'gateway-token');
     const configPath = join(paths.stateDirectory, 'openclaw.json');
+    const supervisorPath = supervisorMarkerPath(paths.projectStateRoot);
     const writes: string[] = [];
     const commands: string[][] = [];
     const devguardCompatibility: Array<{ message: string; severity: 'warn' }> = [];
@@ -152,6 +154,19 @@ describe('cli/doctor', () => {
         writeFile(tokenPath, 'gateway-secret\n'),
         writeFile(configPath, JSON.stringify(stateConfig)),
         writeFile(
+          supervisorPath,
+          JSON.stringify({
+            version: 1,
+            hostname: 'test-host',
+            pid: 42,
+            port: 19_001,
+            profileName: paths.profileName,
+            projectRoot: root,
+            runId: 'run-1',
+            startedAt: '2026-07-30T12:00:00.000Z',
+          }),
+        ),
+        writeFile(
           paths.logPath,
           `${JSON.stringify({ event: 'build_succeeded', pluginBuildId: 'build-1' })}\n`,
         ),
@@ -163,13 +178,14 @@ describe('cli/doctor', () => {
         chmod(markerPath, 0o600),
         chmod(tokenPath, 0o600),
         chmod(configPath, 0o600),
+        chmod(supervisorPath, 0o600),
         chmod(paths.logPath, 0o600),
       ]);
 
       await doctorDevguard(nested, doctorOptions(writes, passingStatus));
 
       assert.equal(writes.length, 1);
-      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 24);
+      assert.equal(writes[0]?.split('\n').filter(Boolean).length, 26);
       assert.match(writes[0] ?? '', /^pass\s+initialized state/m);
       assert.match(writes[0] ?? '', /^pass\s+private artifact permissions/m);
       assert.match(writes[0] ?? '', /^agents\s+main$/m);
@@ -217,6 +233,7 @@ describe('cli/doctor', () => {
         [
           'initialized',
           'artifact-permissions',
+          'supervisor-owner',
           'profile-import',
           'agent-state-isolated',
           'profile-isolated',
@@ -229,6 +246,7 @@ describe('cli/doctor', () => {
           'openai-runtime-compatible',
           'openclaw-compatible',
           'gateway-reachable',
+          'gateway-port-owner',
           'profile-active',
           'channels-disabled',
           'guard-active',
@@ -297,6 +315,36 @@ describe('cli/doctor', () => {
       assert.deepEqual(
         failedReport.checks.filter(({ ok }) => !ok).map(({ id }) => id),
         ['guard-active'],
+      );
+
+      writes.length = 0;
+      await assert.rejects(
+        doctorDevguard(nested, {
+          ...doctorOptions(writes, passingStatus, true),
+          inspectPort: async (port) => ({
+            available: false,
+            detail: 'address already in use',
+            host: '127.0.0.1',
+            port,
+          }),
+          queryStatus: async () => {
+            throw new Error('connection refused');
+          },
+        }),
+        /DevGuard doctor checks failed/,
+      );
+      const portReport = JSON.parse(writes[0] ?? '') as {
+        checks: Array<{ detail?: string; id: string; ok: boolean }>;
+      };
+      assert.deepEqual(
+        portReport.checks.find(({ id }) => id === 'gateway-port-owner'),
+        {
+          detail:
+            'configured port is occupied without a reachable DevGuard Gateway (address already in use); stop its current owner or change gateway.port',
+          id: 'gateway-port-owner',
+          label: 'gateway port ownership',
+          ok: false,
+        },
       );
 
       const auditLog = await readFile(paths.logPath, 'utf8');

@@ -22,7 +22,11 @@ import { logDebug, logInfo, type Logger, reportError } from '../lib/logger.ts';
 import createProjectWatcher from '../lib/project-watcher.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
+import acquireSupervisorOwnership, {
+  type SupervisorOwnership,
+} from '../lib/supervisor-ownership.ts';
 import warnIfAuditLogLarge from '../utils/audit-log-size.ts';
+import inspectGatewayPort from '../utils/gateway-port.ts';
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
@@ -33,7 +37,9 @@ import assertSupportedHost from '../utils/supported-host.ts';
 const DEFAULT_GATEWAY_STARTUP_TIMEOUT_MS = 60_000;
 
 export interface RunDevguardOptions {
+  acquireSupervisor?: typeof acquireSupervisorOwnership;
   environment?: NodeJS.ProcessEnv;
+  inspectPort?: typeof inspectGatewayPort;
   logger: Logger;
   once?: boolean;
   output?: CliOutput;
@@ -273,57 +279,124 @@ export default async function runDevguard(
     },
   });
 
-  const watcher = await createProjectWatcher({
-    root,
-    paths: config.plugin.watch,
-    onChange: ({ event, path }) => {
-      logDebug(options.logger, `watch event ${event}: ${path}`);
-      runner.requestBuild();
-    },
-    onError: (error) => {
-      reportError(options.logger, 'project watcher failed', error);
-    },
-  });
-  logDebug(
-    options.logger,
-    `watching ${config.plugin.watch.length} configured path${config.plugin.watch.length === 1 ? '' : 's'} for ${config.plugin.id}`,
-  );
-
-  const shutdown = async (): Promise<void> => {
-    logDebug(options.logger, `stopping supervision for ${config.plugin.id}`);
-    await watcher.close();
-    await runner.stop();
-    await events.flush();
-  };
-  runner.requestBuild();
-
+  const acquireSupervisor = options.acquireSupervisor ?? acquireSupervisorOwnership;
+  let ownership: SupervisorOwnership;
   try {
-    const initialStatus = await ready;
-    if (options.once) {
-      await shutdown();
-      return initialStatus;
-    }
-
-    let removeSignalListeners = (): void => undefined;
-    const terminationSignal = new Promise<void>((resolveSignal) => {
-      const finish = (): void => resolveSignal();
-      process.once('SIGINT', finish);
-      process.once('SIGTERM', finish);
-      removeSignalListeners = () => {
-        process.removeListener('SIGINT', finish);
-        process.removeListener('SIGTERM', finish);
-      };
+    ownership = await acquireSupervisor({
+      port: config.gateway.port,
+      profileName: paths.profileName,
+      projectRoot: root,
+      projectStateRoot: paths.projectStateRoot,
+      runId,
     });
-    const gatewayError = await Promise.race([
-      terminationSignal.then(() => undefined),
-      gatewayFailure,
-    ]);
-    removeSignalListeners();
-    if (gatewayError) throw gatewayError;
-    await shutdown();
-    return gatewayStatus ?? initialStatus;
+    events.record({
+      event: 'supervisor_acquired',
+      ownerPid: ownership.owner.pid,
+      port: ownership.owner.port,
+      recoveredStaleOwner: ownership.recoveredStaleOwner,
+    });
   } catch (error) {
-    await shutdown();
+    const message = reportError(options.logger, 'supervisor ownership failed', error);
+    events.record({ event: 'supervisor_acquire_failed', error: message });
+    await events.flush();
     throw error;
   }
+
+  const supervise = async (): Promise<GatewayStatus> => {
+    const portInspection = await (options.inspectPort ?? inspectGatewayPort)(config.gateway.port);
+    if (!portInspection.available) {
+      const detail = portInspection.detail ? ` (${portInspection.detail})` : '';
+      const error = new Error(
+        `DevGuard Gateway port ${portInspection.port} on ${portInspection.host} is unavailable${detail}; stop its current owner or change gateway.port`,
+      );
+      events.record({
+        event: 'gateway_port_unavailable',
+        host: portInspection.host,
+        port: portInspection.port,
+        error: error.message,
+      });
+      throw error;
+    }
+    events.record({
+      event: 'gateway_port_available',
+      host: portInspection.host,
+      port: portInspection.port,
+    });
+
+    const watcher = await createProjectWatcher({
+      root,
+      paths: config.plugin.watch,
+      onChange: ({ event, path }) => {
+        logDebug(options.logger, `watch event ${event}: ${path}`);
+        runner.requestBuild();
+      },
+      onError: (error) => {
+        reportError(options.logger, 'project watcher failed', error);
+      },
+    });
+    logDebug(
+      options.logger,
+      `watching ${config.plugin.watch.length} configured path${config.plugin.watch.length === 1 ? '' : 's'} for ${config.plugin.id}`,
+    );
+
+    const shutdown = async (): Promise<void> => {
+      logDebug(options.logger, `stopping supervision for ${config.plugin.id}`);
+      await watcher.close();
+      await runner.stop();
+      await events.flush();
+    };
+    runner.requestBuild();
+
+    try {
+      const initialStatus = await ready;
+      if (options.once) {
+        await shutdown();
+        return initialStatus;
+      }
+
+      let removeSignalListeners = (): void => undefined;
+      const terminationSignal = new Promise<void>((resolveSignal) => {
+        const finish = (): void => resolveSignal();
+        process.once('SIGINT', finish);
+        process.once('SIGTERM', finish);
+        removeSignalListeners = () => {
+          process.removeListener('SIGINT', finish);
+          process.removeListener('SIGTERM', finish);
+        };
+      });
+      const gatewayError = await Promise.race([
+        terminationSignal.then(() => undefined),
+        gatewayFailure,
+      ]);
+      removeSignalListeners();
+      if (gatewayError) throw gatewayError;
+      await shutdown();
+      return gatewayStatus ?? initialStatus;
+    } catch (error) {
+      await shutdown();
+      throw error;
+    }
+  };
+
+  let supervision: { error: unknown; ok: false } | { ok: true; status: GatewayStatus };
+  try {
+    supervision = { ok: true, status: await supervise() };
+  } catch (error) {
+    supervision = { error, ok: false };
+  }
+
+  let releaseError: unknown;
+  try {
+    await ownership.release();
+    events.record({ event: 'supervisor_released', ownerPid: ownership.owner.pid });
+  } catch (error) {
+    releaseError = error;
+    const message = reportError(options.logger, 'supervisor release failed', error);
+    events.record({ event: 'supervisor_release_failed', error: message });
+  }
+  await events.flush();
+
+  if (!supervision.ok) throw supervision.error;
+  if (releaseError !== undefined) throw releaseError;
+  return supervision.status;
 }

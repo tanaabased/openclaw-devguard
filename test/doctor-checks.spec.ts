@@ -39,6 +39,7 @@ describe('utils/doctor-checks', () => {
         profileName: 'devguard-example',
         stateDirectory: '/devguard/state',
       },
+      gatewayPortOwned: true,
       importedAgentIds: ['main'],
       initialized: true,
       latestBuildId: 'build-1',
@@ -48,9 +49,10 @@ describe('utils/doctor-checks', () => {
       productionStateDirectory: '/normal/state',
       runtimeInspectionOk: true,
       stateConfig,
+      supervisorOwnerOk: true,
     });
 
-    assert.equal(checks.length, 23);
+    assert.equal(checks.length, 25);
     assert.deepEqual(
       checks.filter(({ ok }) => !ok),
       [],
@@ -65,6 +67,7 @@ describe('utils/doctor-checks', () => {
       expectedPort: 19_001,
       expectedProfileName: 'devguard-example',
       expectedStateDirectory: '/devguard/state',
+      gatewayPortOwned: false,
       importedAgentIds: ['main'],
       initialized: true,
       openClawCompatibilityOk: true,
@@ -81,6 +84,7 @@ describe('utils/doctor-checks', () => {
           list: stateConfig.agents.list,
         },
       },
+      supervisorOwnerOk: false,
     });
 
     assert.deepEqual(
@@ -104,6 +108,7 @@ describe('utils/doctor-checks', () => {
       expectedProfileName: 'devguard-example',
       expectedStateDirectory: '/normal/state',
       gatewayError: 'connection refused',
+      gatewayPortOwned: false,
       initialized: false,
       manifestId: 'wrong-plugin',
       openClawCompatibilityOk: false,
@@ -111,11 +116,13 @@ describe('utils/doctor-checks', () => {
       productionStateDirectory: '/normal/state',
       runtimeInspectionOk: false,
       stateConfig: {},
+      supervisorOwnerOk: false,
     });
 
     const failed = new Set(checks.filter(({ ok }) => !ok).map(({ id }) => id));
     assert.ok(failed.has('initialized'));
     assert.ok(failed.has('artifact-permissions'));
+    assert.ok(failed.has('supervisor-owner'));
     assert.ok(failed.has('profile-import'));
     assert.ok(failed.has('agent-state-isolated'));
     assert.ok(failed.has('profile-isolated'));
@@ -124,6 +131,7 @@ describe('utils/doctor-checks', () => {
     assert.ok(failed.has('exec-pipeline-open'));
     assert.ok(failed.has('openclaw-compatible'));
     assert.ok(failed.has('gateway-reachable'));
+    assert.ok(failed.has('gateway-port-owner'));
     assert.ok(failed.has('guard-active'));
     assert.ok(failed.has('target-id'));
     assert.ok(failed.has('runtime-inspection'));

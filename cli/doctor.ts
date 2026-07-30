@@ -22,8 +22,10 @@ import processCommand, {
 } from '../lib/process-command.ts';
 import { findProjectRoot, readProjectConfig, resolveProjectPaths } from '../lib/project-config.ts';
 import createRuntimeEventRecorder from '../lib/runtime-events.ts';
+import { readSupervisorOwner, type SupervisorOwner } from '../lib/supervisor-ownership.ts';
 import warnIfAuditLogLarge from '../utils/audit-log-size.ts';
 import doctorChecks, { latestSuccessfulBuildId } from '../utils/doctor-checks.ts';
+import inspectGatewayPort from '../utils/gateway-port.ts';
 import isolatedOpenClawEnvironment, {
   openClawProfileArguments,
 } from '../utils/isolated-openclaw-environment.ts';
@@ -53,6 +55,7 @@ type DoctorCommand = (
 export interface DoctorDevguardOptions {
   environment?: NodeJS.ProcessEnv;
   fixPermissions?: boolean;
+  inspectPort?: typeof inspectGatewayPort;
   json?: boolean;
   logger: Logger;
   output?: CliOutput;
@@ -176,6 +179,8 @@ function privateArtifacts(
     { kind: 'file', path: join(projectStateRoot, 'gateway-token') },
     { kind: 'file', path: join(projectStateRoot, 'init.json') },
     { kind: 'file', path: join(projectStateRoot, 'openclaw.before-devguard.json') },
+    { kind: 'file', path: join(projectStateRoot, 'supervisor.json') },
+    { kind: 'file', path: join(projectStateRoot, 'supervisor.json.lock') },
     { kind: 'file', path: logPath },
     { kind: 'file', path: join(projectStateRoot, 'logs', 'raw-stream.jsonl') },
     { kind: 'file', path: join(stateDirectory, 'openclaw.json') },
@@ -186,6 +191,28 @@ function privateArtifacts(
       artifacts.map((artifact) => [`${artifact.kind}:${artifact.path}`, artifact]),
     ).values(),
   ];
+}
+
+function supervisorOwnerStatus(
+  owner: Attempt<SupervisorOwner | undefined>,
+  projectRoot: string,
+  profileName: string,
+  port: number,
+): { detail?: string; ok: boolean } {
+  if (owner.error) return { detail: owner.error, ok: false };
+  if (!owner.value) return { detail: 'no active DevGuard supervisor owns this project', ok: false };
+
+  const mismatches = [
+    ...(owner.value.projectRoot === projectRoot ? [] : ['project']),
+    ...(owner.value.profileName === profileName ? [] : ['profile']),
+    ...(owner.value.port === port ? [] : ['port']),
+  ];
+  return mismatches.length === 0
+    ? { ok: true }
+    : {
+        detail: `owner pid ${owner.value.pid} does not match the expected ${mismatches.join(', ')}`,
+        ok: false,
+      };
 }
 
 async function inspectArtifactPermissions(
@@ -260,6 +287,7 @@ export default async function doctorDevguard(
     devguardRuntimeInspectionResult,
     pluginDoctor,
     token,
+    supervisorOwner,
   ] = await Promise.all([
     attempt(() => readFile(join(paths.projectStateRoot, 'init.json'), 'utf8')),
     attempt(() =>
@@ -345,6 +373,7 @@ export default async function doctorDevguard(
     attempt(async () =>
       (await readFile(join(paths.projectStateRoot, 'gateway-token'), 'utf8')).trim(),
     ),
+    attempt(() => readSupervisorOwner(paths.projectStateRoot)),
   ]);
 
   const gatewayConfig = commandJson(gatewayConfigResult);
@@ -398,6 +427,15 @@ export default async function doctorDevguard(
         }).then(parseGatewayStatus),
       )
     : { error: token.error ?? 'isolated Gateway token is empty' };
+  const gatewayPort = gatewayStatus.value
+    ? undefined
+    : await (options.inspectPort ?? inspectGatewayPort)(config.gateway.port);
+  const supervisor = supervisorOwnerStatus(
+    supervisorOwner,
+    root,
+    paths.profileName,
+    config.gateway.port,
+  );
   const targetRuntimeInspection = commandRuntimeInspection(
     targetRuntimeInspectionResult,
     config.plugin.id,
@@ -425,6 +463,12 @@ export default async function doctorDevguard(
     expectedProfileName: paths.profileName,
     expectedStateDirectory: paths.stateDirectory,
     gatewayError: gatewayStatus.error,
+    gatewayPortDetail: gatewayStatus.value
+      ? undefined
+      : gatewayPort?.available
+        ? 'configured port is available but no DevGuard Gateway is reachable; start devguard run'
+        : `configured port is occupied without a reachable DevGuard Gateway${gatewayPort?.detail ? ` (${gatewayPort.detail})` : ''}; stop its current owner or change gateway.port`,
+    gatewayPortOwned: gatewayStatus.value !== undefined,
     gatewayStatus: gatewayStatus.value as GatewayStatus | undefined,
     importedAgentIds: profileImport.value,
     initialized: marker.value !== undefined,
@@ -446,6 +490,8 @@ export default async function doctorDevguard(
     runtimeInspectionOk: targetRuntimeInspection.value !== undefined,
     stateConfig,
     stateConfigError,
+    supervisorOwnerDetail: supervisor.detail,
+    supervisorOwnerOk: supervisor.ok,
   });
   const failed = checks.filter((check) => !check.ok);
 

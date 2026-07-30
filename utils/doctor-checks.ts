@@ -25,6 +25,8 @@ export interface DoctorCheckInput {
   expectedProfileName: string;
   expectedStateDirectory: string;
   gatewayError?: string;
+  gatewayPortDetail?: string;
+  gatewayPortOwned: boolean;
   gatewayStatus?: DoctorGatewayStatus;
   importedAgentIds?: string[];
   initialized: boolean;
@@ -41,6 +43,8 @@ export interface DoctorCheckInput {
   runtimeInspectionOk: boolean;
   stateConfig?: unknown;
   stateConfigError?: string;
+  supervisorOwnerDetail?: string;
+  supervisorOwnerOk: boolean;
 }
 
 function nestedValue(value: unknown, path: readonly string[]): unknown {
@@ -138,6 +142,12 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
       input.artifactPermissionsDetail,
     ),
     check(
+      'supervisor-owner',
+      'project supervisor owner',
+      input.supervisorOwnerOk,
+      input.supervisorOwnerDetail,
+    ),
+    check(
       'profile-import',
       'source profile imported',
       importedAgentIds.length > 0,
@@ -184,6 +194,12 @@ export default function doctorChecks(input: DoctorCheckInput): DoctorCheck[] {
       input.openClawCompatibilityDetail,
     ),
     check('gateway-reachable', 'gateway reachable', status !== undefined, input.gatewayError),
+    check(
+      'gateway-port-owner',
+      'gateway port ownership',
+      input.gatewayPortOwned,
+      input.gatewayPortDetail,
+    ),
     check(
       'profile-active',
       'isolated profile active',
