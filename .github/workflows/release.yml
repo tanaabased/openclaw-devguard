@@ -149,6 +149,7 @@ jobs:
           CLAWHUB_TOKEN: ${{ secrets.TANAAB_LOBSTER_BOAT }}
         run: |
           TARBALL=$(npm pack --silent --ignore-scripts --pack-destination "$RUNNER_TEMP")
+          bunx --no-install clawhub --no-input login --token "$CLAWHUB_TOKEN"
           bunx --no-install clawhub package publish \
             "$RUNNER_TEMP/$TARBALL" \
             --family code-plugin \
