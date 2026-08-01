@@ -1,6 +1,6 @@
 {
   "name": "@tanaab/openclaw-devguard",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Develop OpenClaw plugins with reduced system impact, automatic builds, and reloads.",
   "license": "MIT",
   "type": "module",
