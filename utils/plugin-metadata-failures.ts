@@ -1,8 +1,11 @@
+import { SUPPORTED_HOST_PLATFORMS } from './supported-host.ts';
+
 export interface PackageMetadata {
   engines?: {
     node?: string;
   };
   name?: string;
+  os?: string[];
   version?: string;
   openclaw?: {
     extensions?: string[];
@@ -24,6 +27,7 @@ export interface PluginManifest {
 
 export type PluginMetadataFailureCode =
   | 'package-name'
+  | 'supported-os'
   | 'plugin-id'
   | 'version-mismatch'
   | 'source-entry'
@@ -31,8 +35,7 @@ export type PluginMetadataFailureCode =
   | 'startup-activation'
   | 'cli-command'
   | 'config-schema-type'
-  | 'config-schema-strictness'
-  | 'logging-config';
+  | 'config-schema-strictness';
 
 export interface PluginMetadataFailure {
   code: PluginMetadataFailureCode;
@@ -52,6 +55,12 @@ export default function pluginMetadataFailures(
     packageMetadata.name === '@tanaab/openclaw-devguard',
     'package-name',
     'unexpected npm package name',
+  );
+  check(
+    packageMetadata.os?.length === SUPPORTED_HOST_PLATFORMS.length &&
+      SUPPORTED_HOST_PLATFORMS.every((platform) => packageMetadata.os?.includes(platform)),
+    'supported-os',
+    'npm package must support exactly macOS and Linux',
   );
   check(manifest.id === 'openclaw-devguard', 'plugin-id', 'unexpected OpenClaw plugin id');
   check(
@@ -90,11 +99,5 @@ export default function pluginMetadataFailures(
     'config-schema-strictness',
     'config schema must be strict',
   );
-  check(
-    manifest.configSchema?.properties?.logging !== undefined,
-    'logging-config',
-    'logging config is missing',
-  );
-
   return failures;
 }

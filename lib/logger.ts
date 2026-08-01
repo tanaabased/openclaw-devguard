@@ -21,6 +21,10 @@ export function logInfo(logger: Logger, message: string): void {
   logger.info(prefix(message));
 }
 
+export function logWarn(logger: Logger, message: string): void {
+  logger.warn(prefix(message));
+}
+
 export function reportError(logger: Logger, context: string, error: unknown): string {
   const message = formatErrorMessage(error);
   if (typeof error === 'object' && error !== null) {

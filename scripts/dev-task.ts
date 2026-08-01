@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 
 import chokidar from 'chokidar';
 
-import createDevRunner from '../lib/dev-runner.ts';
+import createDevRunner, { DEVGUARD_MANAGED_RUNTIME_ENV } from '../lib/dev-runner.ts';
 
 const runner = createDevRunner({
   startBuild: () => spawn('bun', ['run', 'build'], { stdio: 'inherit' }),
@@ -11,6 +11,7 @@ const runner = createDevRunner({
       stdio: 'inherit',
       env: {
         ...process.env,
+        [DEVGUARD_MANAGED_RUNTIME_ENV]: '1',
         OPENCLAW_SKIP_CHANNELS: '1',
         OPENCLAW_PLUGIN_LIFECYCLE_TRACE: '1',
       },

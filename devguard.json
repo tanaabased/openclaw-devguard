@@ -6,9 +6,14 @@
       "command": "bun",
       "args": ["run", "build"]
     },
+    "validate": {
+      "command": "bun",
+      "args": ["run", "plugin:check"]
+    },
     "watch": [
       "cli",
       "lib",
+      "scripts",
       "utils",
       "index.ts",
       "openclaw.plugin.json",
@@ -16,10 +21,18 @@
       "tsconfig.json"
     ]
   },
+  "policy": {
+    "mode": "probe"
+  },
   "logging": {
     "environmentValueAllowlist": []
   },
   "gateway": {
     "port": 19001
+  },
+  "supervision": {
+    "buildTimeoutSeconds": 120,
+    "validationTimeoutSeconds": 300,
+    "shutdownGraceSeconds": 5
   }
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import waitForGatewayStatus, {
   type GatewayStatus,
   GatewayStatusTimeoutError,
+  parseGatewayStatus,
 } from '../lib/gateway-status.ts';
 
 interface Deferred<T> {
@@ -20,13 +21,29 @@ function deferred<T>(): Deferred<T> {
 
 function statusResult(pluginBuildId: string): GatewayStatus {
   return {
+    ambientChannelsDisabled: true,
+    denyUnknownTools: true,
+    pluginId: 'example-plugin',
     pluginBuildId,
     hookRegistered: true,
-    policyMode: 'deny',
+    policyMode: 'probe',
+    profileName: 'devguard-example',
+    stateDirectory: '/home/tester/.openclaw-devguard-example',
   };
 }
 
 describe('lib/gateway-status', () => {
+  it('should reject a changed status response contract with the invalid field', () => {
+    assert.throws(
+      () => parseGatewayStatus({ ...statusResult('build-1'), hookRegistered: 'yes' }),
+      /hookRegistered has an unexpected value/,
+    );
+    assert.throws(
+      () => parseGatewayStatus({ ...statusResult('build-1'), profileName: undefined }),
+      /profileName has an unexpected value/,
+    );
+  });
+
   it('should keep polling when a previous Gateway build answers first', async () => {
     const results = [statusResult('build-1'), statusResult('build-2')];
     let queries = 0;
@@ -118,6 +135,66 @@ describe('lib/gateway-status', () => {
         timeoutMs: 1_000,
       }),
       /DevGuard hook/,
+    );
+  });
+
+  it('should reject a matching build with the wrong policy mode', async () => {
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        expectedPolicyMode: 'deny',
+        isCurrent: () => true,
+        queryStatus: () => Promise.resolve(statusResult('build-1')),
+        timeoutMs: 1_000,
+      }),
+      /deny mode/,
+    );
+  });
+
+  it('should reject a matching build that allows unknown tools', async () => {
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        isCurrent: () => true,
+        queryStatus: () => Promise.resolve({ ...statusResult('build-1'), denyUnknownTools: false }),
+        timeoutMs: 1_000,
+      }),
+      /unknown tools/,
+    );
+  });
+
+  it('should reject a matching build from another profile or state directory', async () => {
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        expectedProfileName: 'devguard-example',
+        expectedStateDirectory: '/home/tester/.openclaw-devguard-example',
+        isCurrent: () => true,
+        queryStatus: () =>
+          Promise.resolve({
+            ...statusResult('build-1'),
+            profileName: 'wrong-profile',
+            stateDirectory: '/home/tester/.openclaw-wrong-profile',
+          }),
+        timeoutMs: 1_000,
+      }),
+      /expected OpenClaw profile/,
+    );
+    await assert.rejects(
+      waitForGatewayStatus({
+        expectedBuildId: 'build-1',
+        expectedProfileName: 'devguard-example',
+        expectedStateDirectory: '/home/tester/.openclaw-devguard-example',
+        isCurrent: () => true,
+        queryStatus: () =>
+          Promise.resolve({
+            ...statusResult('build-1'),
+            profileName: 'devguard-example',
+            stateDirectory: '/home/tester/.openclaw-wrong-profile',
+          }),
+        timeoutMs: 1_000,
+      }),
+      /expected OpenClaw state directory/,
     );
   });
 });

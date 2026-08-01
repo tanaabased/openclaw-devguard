@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 
 import { type Logger } from '../lib/logger.ts';
-import registerDevguardCli, { type CommandLike, runCliAction } from '../lib/register-cli.ts';
+import registerDevguardCli, {
+  collectOption,
+  type CommandLike,
+  parseStartupTimeoutMs,
+  runCliAction,
+} from '../lib/register-cli.ts';
 
 const logger: Logger = {
   info() {},
@@ -54,27 +59,64 @@ describe('lib/register-cli', () => {
     const devguard = findCommand(program, 'devguard');
     assert.deepEqual(
       new Set(devguard.children.map((command) => command.specification)),
-      new Set(['init [plugin-path]', 'run', 'tail', 'doctor', 'restore']),
+      new Set([
+        'init [plugin-path]',
+        'profile [plugin-path]',
+        'exec <openclaw-args...>',
+        'shell',
+        'run',
+        'tail',
+        'doctor',
+        'restore',
+      ]),
+    );
+    assert.deepEqual(
+      new Set(findCommand(devguard, 'init [plugin-path]').options),
+      new Set(['--agent <id>', '--reset-agents', '--no-model-profile', '--copy-oauth']),
     );
     assert.deepEqual(
       new Set(findCommand(devguard, 'run').options),
-      new Set(['--unsafe-raw-stream', '--once']),
+      new Set(['--startup-timeout <seconds>', '--unsafe-raw-stream', '--once']),
     );
-    assert.deepEqual(new Set(findCommand(devguard, 'tail').options), new Set(['--json']));
+    assert.deepEqual(
+      new Set(findCommand(devguard, 'tail').options),
+      new Set(['--json', '--no-follow']),
+    );
+    assert.deepEqual(
+      new Set(findCommand(devguard, 'doctor').options),
+      new Set(['--fix-permissions', '--json']),
+    );
   });
 
-  it('should fail only the explicitly unfinished actions consistently', () => {
+  it('should collect repeated agent options in command-line order', () => {
+    assert.deepEqual(collectOption('ops', collectOption('main', [])), ['main', 'ops']);
+  });
+
+  it('should convert a positive startup timeout from seconds to milliseconds', () => {
+    assert.equal(parseStartupTimeoutMs(undefined), undefined);
+    assert.equal(parseStartupTimeoutMs('60'), 60_000);
+  });
+
+  it('should reject invalid startup timeouts', () => {
+    for (const value of ['0', '-1', '1.5', 'later']) {
+      assert.throws(() => parseStartupTimeoutMs(value), /positive whole number/);
+    }
+  });
+
+  it('should expose handlers for every implemented command', () => {
     const program = new FakeCommand();
     registerDevguardCli(program, { logger });
     const devguard = findCommand(program, 'devguard');
 
-    for (const specification of ['tail', 'doctor', 'restore']) {
+    for (const specification of [
+      'profile [plugin-path]',
+      'exec <openclaw-args...>',
+      'shell',
+      'doctor',
+      'restore',
+    ]) {
       const command = findCommand(devguard, specification);
       assert.equal(typeof command.handler, 'function');
-      assert.throws(
-        () => command.handler?.(),
-        (error: unknown) => error instanceof Error && error.name === 'DevguardNotImplementedError',
-      );
     }
   });
 
@@ -97,6 +139,19 @@ describe('lib/register-cli', () => {
       assert.equal(errors.length, 1);
       assert.match(errors[0] ?? '', /run failed/);
       assert.match(errors[0] ?? '', /broken command/);
+    } finally {
+      process.exitCode = previousExitCode;
+    }
+  });
+
+  it('should preserve a child command exit code', async () => {
+    const previousExitCode = process.exitCode;
+
+    try {
+      process.exitCode = undefined;
+      await runCliAction(logger, 'exec failed', async () => 23);
+
+      assert.equal(process.exitCode, 23);
     } finally {
       process.exitCode = previousExitCode;
     }

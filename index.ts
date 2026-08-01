@@ -1,69 +1,47 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
 
+import { DEVGUARD_MANAGED_RUNTIME_ENV } from './lib/dev-runner.ts';
 import { logDebug, logInfo, reportError } from './lib/logger.ts';
-import createToolGuard, { TOOL_GUARD_PRIORITY } from './lib/tool-guard.ts';
+import createToolGuard, {
+  TOOL_CAPTURE_PRIORITY,
+  TOOL_GUARD_PRIORITY,
+  type ToolPolicyMode,
+} from './lib/tool-guard.ts';
 import registerDevguardCli from './lib/register-cli.ts';
 
-interface DevguardPluginConfig {
-  logging?: {
-    logPath?: string;
-    environmentValueAllowlist?: string[];
-  };
-}
-
-function runtimeSettings(pluginConfig: Record<string, unknown> | undefined): {
+function runtimeSettings(): {
   logPath: string;
   environmentValueAllowlist: string[];
+  policyMode: ToolPolicyMode;
 } {
-  const config = (pluginConfig ?? {}) as DevguardPluginConfig;
   const stateDirectory =
     process.env.OPENCLAW_STATE_DIR ?? join(homedir(), '.openclaw-dev', 'devguard');
-  const configuredAllowlist = config.logging?.environmentValueAllowlist ?? [];
   const environmentAllowlist = (process.env.DEVGUARD_ENV_PREVIEW_ALLOWLIST ?? '')
     .split(',')
     .map((name) => name.trim())
     .filter(Boolean);
+  const configuredPolicy = process.env.DEVGUARD_POLICY_MODE;
+  const policyMode =
+    configuredPolicy === undefined || configuredPolicy === 'probe' ? 'probe' : 'deny';
 
   return {
     logPath:
-      process.env.DEVGUARD_LOG_PATH ??
-      config.logging?.logPath ??
-      join(stateDirectory, 'devguard', 'logs', 'events.jsonl'),
-    environmentValueAllowlist: [...new Set([...configuredAllowlist, ...environmentAllowlist])],
+      process.env.DEVGUARD_LOG_PATH ?? join(stateDirectory, 'devguard', 'logs', 'events.jsonl'),
+    environmentValueAllowlist: [...new Set(environmentAllowlist)],
+    policyMode,
   };
 }
 
 export default definePluginEntry({
   id: 'openclaw-devguard',
   name: 'OpenClaw DevGuard',
-  description: 'Development-time safety guardrails for OpenClaw plugin work.',
+  description:
+    'Develop OpenClaw plugins with reduced system impact, automatic builds, and reloads.',
   register(api) {
-    const settings = runtimeSettings(api.pluginConfig);
-    const buildId = process.env.DEVGUARD_BUILD_ID ?? api.version ?? 'development';
-    if (api.registrationMode === 'full') {
-      logDebug(api.logger, `initializing plugin runtime ${api.id} (${buildId})`);
-    }
-    const guard = createToolGuard({
-      pluginId: api.id,
-      buildId,
-      logPath: settings.logPath,
-      environmentValueAllowlist: settings.environmentValueAllowlist,
-      onLogError(error) {
-        reportError(api.logger, 'failed to append the tool-call audit log', error);
-      },
-    });
-
-    api.on('before_tool_call', guard.beforeToolCall, { priority: TOOL_GUARD_PRIORITY });
-    if (api.registrationMode === 'full') {
-      logInfo(api.logger, `deny policy registered with priority ${TOOL_GUARD_PRIORITY}`);
-      logDebug(api.logger, `audit log configured at ${settings.logPath}`);
-    }
-    api.registerGatewayMethod('devguard.status', ({ respond }) => {
-      respond(true, guard.status());
-    });
     api.registerCli(
       ({ logger, program }) => {
         registerDevguardCli(program, { logger, pluginRoot: api.rootDir });
@@ -79,5 +57,39 @@ export default definePluginEntry({
         ],
       },
     );
+
+    if (api.registrationMode !== 'full' || process.env[DEVGUARD_MANAGED_RUNTIME_ENV] !== '1') {
+      return;
+    }
+
+    const settings = runtimeSettings();
+    const buildId = process.env.DEVGUARD_BUILD_ID ?? api.version ?? 'development';
+    const targetPluginId = process.env.DEVGUARD_TARGET_PLUGIN_ID ?? api.id;
+    logDebug(api.logger, `initializing plugin runtime ${api.id} (${buildId})`);
+    const guard = createToolGuard({
+      pluginId: targetPluginId,
+      buildId,
+      logPath: settings.logPath,
+      policyMode: settings.policyMode,
+      probeExecutablePath: process.execPath,
+      probeScriptPath: fileURLToPath(new URL('./exec-probe-task.js', import.meta.url)),
+      environmentValueAllowlist: settings.environmentValueAllowlist,
+      onLogError(error) {
+        reportError(api.logger, 'failed to append the tool-call audit log', error);
+      },
+    });
+
+    api.on('before_tool_call', guard.captureToolCall, { priority: TOOL_CAPTURE_PRIORITY });
+    api.on('before_tool_call', guard.applyToolPolicy, { priority: TOOL_GUARD_PRIORITY });
+    api.on('after_tool_call', guard.recordToolResult);
+    api.on('before_prompt_build', guard.buildPromptContext);
+    logInfo(
+      api.logger,
+      `tool capture and ${settings.policyMode} policy registered with priorities ${TOOL_CAPTURE_PRIORITY}/${TOOL_GUARD_PRIORITY}`,
+    );
+    logDebug(api.logger, `audit log configured at ${settings.logPath}`);
+    api.registerGatewayMethod('devguard.status', ({ respond }) => {
+      respond(true, guard.status());
+    });
   },
 });

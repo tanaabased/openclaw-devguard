@@ -23,7 +23,18 @@ jobs:
         example:
           - install
           - init
+          - exec
+          - shell
           - run
+          - tail
+          - doctor
+          - restore
+          - restart
+          - supervisor
+          - cleanup
+          - plugin
+          - model
+          - agent
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -32,10 +43,13 @@ jobs:
       - name: Put Homebrew on PATH
         shell: bash
         run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
-      - name: Install Homebrew dependencies
+      - name: Refresh Homebrew when needed
+        shell: bash
+        run: HOMEBREW_NO_AUTO_UPDATE= brew update-if-needed
+      - name: Install OpenClaw CLI
         shell: bash
         run: |
-          brew bundle --file "$GITHUB_WORKSPACE/Brewfile" --no-upgrade
+          brew install openclaw-cli
           echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
       - name: Install Node
         uses: actions/setup-node@v6
@@ -68,8 +82,9 @@ jobs:
         shell: bash
         env:
           DEVGUARD_HOME: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp/devguard-home
-          OPENCLAW_SKIP_CHANNELS: '1'
-          OPENCLAW_STATE_DIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp/openclaw
+          NO_COLOR: '1'
+          OPENAI_API_KEY: ${{ secrets.TANAAB_ALTERNATE_MALE_KEY }}
+          OPENAI_MODEL: gpt-5.4-nano
           TMPDIR: ${{ github.workspace }}/examples/${{ matrix.example }}/.tmp
         run: |
           mkdir -p "$TMPDIR"

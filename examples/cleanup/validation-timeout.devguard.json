@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "plugin": {
+    "id": "openclaw-devguard",
+    "build": {
+      "command": "bun",
+      "args": ["run", "build"]
+    },
+    "validate": {
+      "command": "bash",
+      "args": ["examples/cleanup/conditional-validation.sh"]
+    },
+    "watch": ["index.ts"]
+  },
+  "policy": {
+    "mode": "probe"
+  },
+  "logging": {
+    "environmentValueAllowlist": []
+  },
+  "gateway": {
+    "port": 19001
+  },
+  "supervision": {
+    "buildTimeoutSeconds": 120,
+    "validationTimeoutSeconds": 1,
+    "shutdownGraceSeconds": 1
+  }
+}

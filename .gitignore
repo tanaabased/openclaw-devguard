@@ -3,6 +3,7 @@ node_modules/
 dist/
 build/
 coverage/
+reports/
 .nyc_output/
 *.tsbuildinfo
 *.tgz

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "plugin": {
+    "id": "devguard-example",
+    "build": {
+      "command": "bun",
+      "args": ["run", "build"]
+    },
+    "validate": {
+      "command": "bun",
+      "args": ["run", "plugin:check"]
+    },
+    "watch": ["index.mjs", "openclaw.plugin.json", "package.json"]
+  },
+  "policy": {
+    "mode": "probe"
+  },
+  "logging": {
+    "environmentValueAllowlist": ["DEVGUARD_EXAMPLE_EXEC_ENV"]
+  },
+  "gateway": {
+    "port": 19001
+  }
+}

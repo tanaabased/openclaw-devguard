@@ -1,12 +1,12 @@
 const result = await Bun.build({
-  entrypoints: ['index.ts'],
+  entrypoints: ['index.ts', 'scripts/exec-probe-task.ts'],
   outdir: 'dist',
   target: 'node',
   format: 'esm',
   packages: 'external',
   sourcemap: 'external',
   minify: false,
-  naming: 'index.js',
+  naming: '[name].js',
 });
 
 if (!result.success) {

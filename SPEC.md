@@ -1,696 +1,172 @@
-# OpenClaw DevGuard v0.1
+# OpenClaw DevGuard Product Specification
 
 ## Purpose
 
-`OpenClaw DevGuard` is a development-focused OpenClaw plugin and CLI workflow for safely testing OpenClaw plugins on a developer workstation.
+OpenClaw DevGuard is a local development supervisor for advanced OpenClaw plugin work. It gives a target plugin its own OpenClaw profile and Gateway, rebuilds it as source changes, and lets a developer observe agent-requested tool lifecycles while limiting unintended host mutation.
 
-The primary goal of v0.1 is to let a developer observe what an agent attempts to do without allowing agent-initiated tool calls to mutate the workstation or external systems.
+DevGuard is for developer-controlled plugin code and untrusted agent tool requests. It is not a security boundary for arbitrary code.
 
-> Working name: `@tanaab/openclaw-devguard`
+This specification records durable product intent, exclusions, and remaining work. The code, focused tests, operational examples, and changelog are the evidence for what a checkout currently implements. User-facing command and configuration details belong in [README.md](./README.md) and [ADVANCED.md](./ADVANCED.md).
 
-## Problem
+## Current Product Contract
 
-Developing OpenClaw plugins locally provides a much faster feedback loop than developing on a remote Agent Box, but it introduces several risks and workflow problems:
+The current product has these public behaviors:
 
-- Agent tool calls may modify the developer's filesystem.
-- `exec` calls may run arbitrary commands.
-- Network, messaging, browser, cron, and external-service tools may cause real side effects.
-- A normal OpenClaw workspace is not a security boundary.
-- OpenClaw does not currently provide a universal dry-run mode that replaces every tool result with a simulated success.
-- External plugin development generally requires repeated builds, Gateway restarts, runtime inspection, and log monitoring.
-- Existing OpenClaw audit logs intentionally omit the tool arguments and outputs needed for development debugging.
-- Raw trace logs may expose prompts, credentials, tokens, and other sensitive data.
+- `init` creates or validates `devguard.json`, derives isolated OpenClaw state, imports selected agents and bounded model/authentication configuration, builds and validates within configured deadlines, installs the target and DevGuard, and validates the result.
+- `profile`, `exec`, and `shell` make native OpenClaw commands practical against initialized isolated state without requiring users to export profile or state selectors.
+- `run` acquires exclusive per-project ownership, diagnoses its loopback port without signaling another owner, then builds, validates, starts, verifies, watches, and replaces the target Gateway while retaining the last working Gateway after a replacement build or validation failure or timeout.
+- `tail` exposes human-readable or raw JSONL audit events, `doctor` aggregates live checks, and `restore` removes or restores only DevGuard-managed isolated state while preserving logs.
+- DevGuard's runtime policy activates only in a DevGuard-managed Gateway. Installing it in a normal profile exposes the CLI without guarding that profile's tools.
+- `probe` is the default policy. It replaces `exec` with a fixed recorder, preserves the real OpenClaw tool-result lifecycle, and tells the agent that the original command did not run.
+- `deny` is an explicit terminal-block mode. In both modes, unknown tools and tools without a probe are blocked.
+- Only `exec` currently has a non-mutating probe. The external-plugin Leia scenario proves that `resolve_exec_env` can modify the recorder environment without executing the agent's requested command.
 
-## v0.1 Product Definition
+The public command group is:
 
-DevGuard v0.1 will provide a reproducible, isolated, fail-closed OpenClaw plugin development environment.
-
-It will:
-
-1. Configure and use an isolated OpenClaw development profile.
-2. Link and enable a local plugin under development.
-3. Intercept agent tool calls before execution.
-4. Log attempted tool calls in a development-focused format.
-5. Block side-effecting tool calls by default.
-6. Automatically rebuild and restart the development Gateway when plugin code changes.
-7. Aggregate plugin validation, runtime, lifecycle, and policy diagnostics.
-8. Restore the development profile to its previous state.
-
-DevGuard v0.1 is a **capture-and-deny system**, not a true simulation engine.
-
-## Key Safety Model
-
-### What DevGuard protects
-
-DevGuard protects operations that pass through OpenClaw's normal tool-call execution pipeline.
-
-Examples:
-
-- `exec`
-- `process`
-- filesystem writes and edits
-- browser or computer-control tools
-- network and external-service tools
-- messaging tools
-- cron and Gateway administration tools
-- plugin-defined tools registered with OpenClaw
-
-### What DevGuard does not protect
-
-DevGuard cannot fully isolate code executed directly by the plugin under development.
-
-It does not necessarily prevent side effects caused by:
-
-- module import or top-level initialization
-- the plugin's `register()` implementation
-- `gateway_start` hooks
-- background timers or workers
-- direct Node.js or Bun filesystem calls
-- direct HTTP requests
-- directly spawned subprocesses
-- bugs in OpenClaw itself
-
-The documentation must state clearly:
-
-> DevGuard provides tool-pipeline guardrails, not complete host isolation.
-
-Complete isolation would require running the entire OpenClaw Gateway inside a container, VM, or separate operating-system account. That is outside the v0.1 scope.
-
-## Package Shape
-
-The initial package should contain both:
-
-- an OpenClaw runtime plugin
-- an OpenClaw CLI command group
-
-Proposed command namespace:
-
-```bash
-openclaw devguard ...
-```
-
-The plugin handles tool interception and logging.
-
-The CLI handles development-profile setup, plugin linking, builds, Gateway lifecycle, diagnostics, and configuration restoration.
-
-## Core Commands
-
-### `openclaw devguard init`
-
-Initializes DevGuard for a local plugin repository.
-
-Example:
-
-```bash
-openclaw devguard init ./path/to/plugin
-```
-
-Responsibilities:
-
-- select or create the OpenClaw `dev` profile
-- ensure state is separate from the normal OpenClaw profile
-- snapshot the existing development-profile configuration
-- disable ambient channels
-- link the local plugin
-- enable the local plugin
-- enable the DevGuard plugin
-- configure fail-closed tool policy
-- enable OpenClaw sandboxing where available
-- default workspace access to `none`
-- disable elevated execution
-- validate the target plugin
-- inspect the target plugin's runtime registration
-- produce a summary of all applied changes
-
-The command must be idempotent.
-
-### `openclaw devguard run`
-
-Runs the development environment.
-
-Example:
-
-```bash
+```text
+openclaw devguard init
+openclaw devguard profile
+openclaw devguard exec
+openclaw devguard shell
 openclaw devguard run
-```
-
-Responsibilities:
-
-- run the target plugin's configured build command
-- start the isolated OpenClaw development Gateway
-- watch source and build output
-- debounce rapid filesystem changes
-- rebuild when needed
-- restart the Gateway after successful builds
-- retain and display failed startup output
-- verify that the expected plugin build loaded
-- enable useful OpenClaw lifecycle diagnostics
-- stream correlated DevGuard and OpenClaw logs
-
-Suggested environment flags:
-
-```bash
-OPENCLAW_PLUGIN_LIFECYCLE_TRACE=1
-OPENCLAW_DIAGNOSTICS=plugin.load-profile
-OPENCLAW_SKIP_CHANNELS=1
-```
-
-Raw prompt and tool-stream tracing must remain opt-in.
-
-Example:
-
-```bash
-openclaw devguard run --unsafe-raw-stream
-```
-
-### `openclaw devguard tail`
-
-Displays attempted tool calls and relevant runtime events.
-
-Example:
-
-```bash
 openclaw devguard tail
-```
-
-Supported output modes:
-
-```bash
-openclaw devguard tail
-openclaw devguard tail --json
-```
-
-The default output should be concise and human-readable.
-
-The JSON mode should emit the underlying JSONL records.
-
-### `openclaw devguard doctor`
-
-Checks whether the environment is actually safe and running the expected code.
-
-Example:
-
-```bash
 openclaw devguard doctor
-```
-
-Checks should include:
-
-- development profile is active
-- the normal production profile is not being mutated
-- ambient channels are disabled
-- sandbox mode is enabled where supported
-- workspace access is `none` or explicitly approved
-- elevated tools are disabled
-- unknown tools are denied
-- DevGuard is loaded
-- the target plugin is linked and enabled
-- the target plugin ID matches its manifest
-- the manifest and exported entry agree
-- the target plugin registered synchronously where required
-- the currently running Gateway loaded the newest successful build
-- no stale build output is active
-- plugin runtime inspection succeeds
-- OpenClaw plugin doctor succeeds
-
-### `openclaw devguard restore`
-
-Restores the development profile to its state before DevGuard initialization.
-
-Example:
-
-```bash
 openclaw devguard restore
 ```
 
-It must:
+## Product Invariants
+
+### Trust boundary
+
+- Agent-requested tool activity is untrusted.
+- The target plugin and its dependencies are developer-controlled.
+- DevGuard governs only activity that reaches public OpenClaw tool-policy hooks.
+- Target imports, `register()`, lifecycle hooks, background workers, direct filesystem or network access, and directly spawned subprocesses remain ordinary Gateway process activity.
+- Documentation must describe DevGuard as a development guardrail, never complete host isolation.
+
+### Tool policy
+
+- Missing policy configuration resolves to `probe`.
+- Unknown or malformed policy configuration fails closed.
+- A high-priority capture hook runs before target-plugin tool hooks, and a low-priority DevGuard policy hook makes the terminal decision after them.
+- Required audit writes fail closed. DevGuard does not execute an original operation when its required attempt or policy record cannot be written.
+- Probe results report the recorder's real result and explicitly state that the original operation did not run.
+- DevGuard never manufactures synthetic tool success or lets an agent infer that requested side effects occurred.
+- Any future mode that permits real execution must be explicitly selected for that run, visibly surfaced, audited, and never inferred or persisted as a fallback.
+- `tools.exec.mode: full` is transport configuration that lets model tool requests reach DevGuard. It is not the DevGuard safety boundary.
 
-- restore the saved development-profile configuration
-- remove DevGuard-specific temporary state
-- avoid changing the user's normal OpenClaw profile
-- preserve logs unless explicitly asked to delete them
+Current policy behavior is intentionally small:
 
-## Tool Policy
+| Tool request       | `probe` mode                          | `deny` mode |
+| ------------------ | ------------------------------------- | ----------- |
+| `exec`             | Replace with recorder and audit       | Block       |
+| Any other tool     | Block because no probe is implemented | Block       |
+| Unknown tool names | Block                                 | Block       |
 
-DevGuard should register a high-priority `before_tool_call` hook.
+### Profile and runtime isolation
 
-Default policy:
+- DevGuard reads but does not mutate the selected source OpenClaw profile.
+- Agent selections and OAuth consent remain machine-local and do not enter `devguard.json`.
+- Imported workspaces remain host-path references; source sessions, channels, bindings, browser state, and broad source policy are not copied.
+- Environment-backed credentials remain environment variables. Portable stored credentials may be copied into isolated agent state; non-portable OAuth requires explicit consent.
+- Imported `openai/*` models use OpenClaw's built-in agent runtime so parameter rewrites and exec-environment hooks reach the probe. Explicit non-OpenAI runtime policy is preserved.
+- Generated profiles keep ambient channels disabled, Docker sandboxing off, elevated tools disabled, and the Gateway bound to loopback with token authentication.
+- Docker sandboxing is not part of DevGuard's safety model and must remain disabled in generated profiles and operational tests.
 
-| Tool category                          | Default       |
-| -------------------------------------- | ------------- |
-| Pure inspection or read-only tools     | Configurable  |
-| Filesystem mutation                    | Block and log |
-| `exec` and process execution           | Block and log |
-| Network and external services          | Block and log |
-| Browser and computer control           | Block and log |
-| Messaging                              | Block and log |
-| Cron, Gateway, and node administration | Block and log |
-| Unknown plugin tools                   | Block and log |
+### Audit and restoration
 
-### Modes
+- DevGuard writes append-only, project-specific JSONL events with correlated tool and lifecycle identifiers when OpenClaw exposes them.
+- Environment values are omitted unless explicitly allowlisted. Credential-shaped names remain redacted even when allowlisted.
+- Sensitive-data obfuscation is best effort; logs may contain prompts, commands, paths, identifiers, and values that do not look like credentials.
+- Human output and diagnostics remain separate from machine-readable JSON output.
+- `restore` affects only canonical DevGuard-owned state and preserves audit logs. It cannot reverse direct target-plugin side effects.
 
-DevGuard should support three explicit modes:
+## Supported Hosts
 
-```yaml
-mode: deny
-mode: approve
-mode: observe
-```
+The advertised host contract must follow exercised CI and operational evidence.
 
-#### `deny`
+- macOS 26 and Ubuntu 24.04 are currently exercised.
+- Windows is unsupported and must not be presented as compatible.
+- Every DevGuard command should fail before project discovery or host interaction on an unsupported host.
+- Platform-specific behavior includes permissions, paths, signals, child-process cleanup, and Gateway supervision.
+- Bounded build, validation, and Gateway processes use supported-host process groups, graceful-then-forceful shutdown, and verified cleanup. Deliberate session or process-group escape remains outside the ownership guarantee.
 
-Default mode.
+## Product Boundaries and Non-Goals
 
-- record the attempted call
-- redact sensitive values
-- block execution
-- return a clear policy error
+The following work is intentionally outside the path to `1.0.0` unless the project is explicitly rechartered:
 
-#### `approve`
+- container, VM, separate-account, or remote-host orchestration
+- enabling, building, or managing OpenClaw Docker sandbox images
+- isolation of arbitrary target-plugin imports, registration code, dependencies, or background work
+- interception of direct Node.js, Bun, filesystem, subprocess, browser, or network APIs
+- synthetic tool success, semantic command simulation, fixture playback, or agent-run replay
+- a generic tool simulator or an obligation to probe every OpenClaw or plugin-defined tool
+- a DevGuard-specific approval terminal, browser interface, or dashboard settings page
+- a separate HTTP or public API surface that duplicates the CLI and existing Gateway status method
+- production policy enforcement, remote Agent Box provisioning, or multi-user runtime management
+- centralized databases, hosted telemetry, or log analytics
+- automatic patching of OpenClaw or imports from private, hashed, or unexported OpenClaw modules
+- mutation of the user's source profile to make an isolated development run work
+- claims that logs are secret-free or that DevGuard can identify every sensitive value
 
-Optional mode.
+Additional probes remain in scope only as exact adapters for stable public tool identities. They must replace the requested operation with a bounded action against disposable DevGuard-owned state, return the controlled action's real result, and state that the requested path, command, or external resource was not used.
 
-- record the attempted call
-- require explicit operator approval
-- execute only after approval
-- record the approval result
+## Remaining Work
 
-This mode may be implemented after the basic v0.1 deny flow if needed.
+### Evaluation rubric
 
-#### `observe`
+- **Complexity:** `S` is one focused surface, `M` coordinates several modules or commands, `L` crosses policy and operational behavior, and `XL` changes the product boundary.
+- **Impact:** `High` materially improves safety or the primary development loop, `Medium` improves recurring diagnosis or ergonomics, and `Low` serves a narrow convenience.
+- **Leverage:** `Excellent` is a strong early investment, `Good` is worthwhile with bounded design work, `Fair` needs proportionally more coordination, and `Poor` does not justify its scope.
+- **Disposition:** `Required` is part of the proposed stable `1.0.0` contract. `Candidate` may land before `1.0.0` but should not delay it without new evidence. `Deferred` needs a demonstrated workflow gap before implementation.
 
-Dangerous mode.
-
-- record the attempted call
-- permit execution
-- display a prominent warning when enabled
-
-This mode must never be the default.
+### Ranked backlog
 
-## Important Limitation: No Synthetic Tool Success
+| Rank | Improvement                      | Complexity | Impact | Leverage | Disposition |
+| ---: | -------------------------------- | ---------- | ------ | -------- | ----------- |
+|    1 | Native OpenClaw `approve` mode   | L          | High   | Good     | Candidate   |
+|    2 | Explicit run-scoped `allow` mode | L          | Medium | Fair     | Candidate   |
+|    3 | Additional exact-tool probes     | M each     | Medium | Fair     | Candidate   |
 
-The normal OpenClaw `before_tool_call` hook can inspect, rewrite, approve, or block a call, but it cannot return an arbitrary synthetic successful tool result.
+### High-value candidates
 
-Therefore, v0.1 cannot transparently make the model believe that a blocked operation succeeded.
+#### Native OpenClaw `approve` mode
 
-Example behavior:
+- Make approval a conspicuous run-scoped selection rather than a persisted project default.
+- Use the public `before_tool_call.requireApproval` contract and native OpenClaw approval surfaces.
+- Initially offer `allow-once` and `deny`; do not build session-persistent approval policy until a real use case requires it.
+- Deny on timeout, cancellation, missing approval routing, malformed resolution, or required audit failure.
+- Record request and resolution, then preserve the real approved, denied, failed, or completed OpenClaw lifecycle.
+- Require focused unit coverage and a CI-first operational scenario before describing the mode as supported.
 
-```text
-Agent requests exec
-→ DevGuard records the command
-→ DevGuard blocks the call
-→ Agent receives a policy error
-```
+#### Explicit `allow` mode
 
-Not:
+- Make real execution a conspicuous `run`-scoped choice that is never inferred or persisted in `devguard.json`.
+- Surface the active mode in startup output, live status, logs, and `doctor`.
+- Record attempts and real outcomes, while retaining independent OpenClaw policy behavior.
+- Block rather than execute when required audit logging fails.
+- Require operational evidence demonstrating real side effects and honest shutdown behavior.
 
-```text
-Agent requests exec
-→ DevGuard records the command
-→ DevGuard returns a fake successful result
-→ Agent continues as though the command ran
-```
-
-A true simulation mode requires an upstream OpenClaw execution seam that supports request-scoped synthetic tool results.
-
-## Logging
+#### Additional tool probes
 
-DevGuard should write append-only JSONL development logs.
+- Add a probe only when a concrete plugin-development lifecycle cannot be tested with `exec` or terminal denial.
+- Bind each probe to an exact stable built-in tool identity and a disposable DevGuard-owned target.
+- Never generalize an adapter into filesystem isolation, command simulation, or replay infrastructure.
+- Preserve the real downstream OpenClaw result and tell the agent what did not happen.
 
-Suggested default location:
+### Deprioritized work
 
-```text
-~/.openclaw-dev/devguard/logs/
-```
+- **Gateway environment allowlisting:** the Gateway currently needs inherited environment credentials, target code is developer-controlled, and this would not create an isolation boundary. Revisit only for a concrete credential-hygiene failure.
+- **Full runtime capability inventory and build-to-build diffs:** current runtime inspection plus explicit boundary documentation covers the immediate need. Revisit when a real plugin surface produces misleading safety claims.
+- **Built-in `tail` filters and bounded queries:** JSONL output already composes with `grep`, `jq`, and other command-line tools. Add dedicated filters only when recurring usage cannot be expressed clearly that way.
+- **Separate policy-plumbing and audit-trail projects:** current `probe` and `deny` readiness and outcomes are implemented. Future `approve`, `allow`, or probe adapters must extend those contracts as part of their own work rather than creating parallel frameworks first.
 
-Example event:
-
-```json
-{
-  "timestamp": "2026-07-25T17:30:00.000Z",
-  "runId": "run_...",
-  "toolCallId": "call_...",
-  "agentId": "dev",
-  "sessionKey": "session_...",
-  "toolName": "exec",
-  "toolKind": "exec",
-  "params": {
-    "command": "npm publish"
-  },
-  "derivedPaths": [],
-  "effects": ["process", "network", "external-state"],
-  "decision": "blocked",
-  "reason": "DevGuard deny mode",
-  "environment": {
-    "keys": ["PATH", "HOME", "GH_TOKEN"],
-    "values": "redacted"
-  }
-}
-```
-
-### Required event types
-
-At minimum:
-
-- tool call attempted
-- tool call blocked
-- tool call approved
-- tool call allowed
-- build started
-- build succeeded
-- build failed
-- Gateway started
-- Gateway restart requested
-- Gateway start failed
-- target plugin loaded
-- target plugin load failed
-- plugin validation failed
-- doctor check failed
-- configuration restored
-
-### Correlation fields
-
-Where available, include:
-
-- timestamp
-- run ID
-- tool-call ID
-- agent ID
-- session key
-- plugin ID
-- plugin build identifier
-- Gateway process identifier
-- decision
-- policy reason
-
-## Environment Variable Handling
-
-DevGuard must not log the complete environment by default.
-
-That would create an unnecessary secret-exposure risk.
-
-Default behavior:
-
-- log environment-variable names only
-- redact values
-- log values only for an explicit allowlist
-- permit hashes or change indicators for selected variables
-- record variables injected by DevGuard itself
-- record environment variables explicitly included in tool arguments
-
-Automatically redact names matching patterns such as:
-
-```text
-TOKEN
-SECRET
-PASSWORD
-AUTH
-COOKIE
-SESSION
-PRIVATE
-CREDENTIAL
-KEY
-```
-
-The tool hook may not have access to the final complete environment inherited by the eventual process. The logs must not imply otherwise.
-
-## Configuration
-
-Suggested project configuration file:
-
-```text
-devguard.yaml
-```
-
-Example:
-
-```yaml
-version: 1
-
-plugin:
-  id: example-plugin
-  path: .
-  buildCommand: npm run plugin:build
-  validateCommand: npm run plugin:validate
-  watch:
-    - src
-    - openclaw.plugin.json
-    - package.json
-
-policy:
-  mode: deny
-  allowReadOnlyTools: true
-  denyUnknownTools: true
-  denyElevated: true
-
-sandbox:
-  enabled: true
-  backend: docker
-  scope: session
-  workspaceAccess: none
-  network: none
-
-logging:
-  format: jsonl
-  redactEnvironmentValues: true
-  environmentValueAllowlist: []
-
-gateway:
-  profile: dev
-  port: 19001
-  disableChannels: true
-```
-
-Configuration should use strict schema validation and reject unknown keys by default.
-
-## Development Loop
-
-Expected user workflow:
-
-```bash
-cd my-openclaw-plugin
-
-openclaw devguard init .
-openclaw devguard run
-```
-
-Then, in another terminal:
-
-```bash
-openclaw devguard tail
-```
-
-During development:
-
-```text
-edit plugin source
-→ DevGuard detects change
-→ target plugin builds
-→ target plugin validates
-→ development Gateway restarts
-→ runtime registration is checked
-→ developer sends a test request
-→ attempted tool calls are logged
-→ side-effecting calls are blocked
-```
-
-When finished:
-
-```bash
-openclaw devguard restore
-```
-
-## Build and Restart Behavior
-
-The watcher should:
-
-- watch explicit configured paths
-- ignore dependency, output, log, and state directories
-- debounce changes
-- avoid overlapping builds
-- terminate stale build processes
-- restart only after a successful build
-- preserve the last working Gateway when a new build fails where practical
-- clearly distinguish build failure from Gateway failure
-- verify the active plugin build after restart
-
-A simple build identifier can be derived from:
-
-- Git commit
-- working-tree dirty state
-- build timestamp
-- source-content hash
-
-## Diagnostics Aggregation
-
-DevGuard should wrap or aggregate existing OpenClaw diagnostics rather than reimplement them.
-
-Relevant checks may call or consume:
-
-```bash
-openclaw plugins inspect <plugin-id> --runtime --json
-openclaw plugins doctor
-```
-
-It should also enable plugin lifecycle tracing and plugin load profiling while running.
-
-The output should clearly separate:
-
-- target plugin build errors
-- manifest errors
-- plugin registration errors
-- Gateway startup errors
-- DevGuard policy decisions
-- OpenClaw sandbox failures
-
-## Fail-Closed Requirements
-
-The environment must fail closed.
-
-Examples:
-
-- If DevGuard fails to register its hook, startup should fail.
-- If the target plugin registers an unknown tool, it should be denied by default.
-- If sandbox configuration cannot be applied, `doctor` should fail prominently.
-- If the wrong OpenClaw profile is active, `run` should refuse to proceed unless explicitly overridden.
-- If configuration parsing fails, no permissive defaults should be assumed.
-- If redaction fails, the affected value should be omitted rather than logged.
-
-## Non-Goals for v0.1
-
-Do not include these in the initial release:
-
-- complete host isolation
-- container orchestration for the entire Gateway
-- a web dashboard
-- synthetic successful tool results
-- full tool-result fixture playback
-- deterministic replay of complete agent runs
-- automatic capture of every environment-variable value
-- production security policy management
-- remote Agent Box provisioning
-- multi-user or multi-tenant policy management
-- database-backed centralized telemetry
-- automatic upstream OpenClaw patching
-
-## Future Work
-
-### True simulation mode
-
-Add support when OpenClaw provides a request-scoped interception point capable of returning synthetic tool results.
-
-Possible future command:
-
-```bash
-openclaw devguard run --simulate
-```
-
-### Full-Gateway container mode
-
-Run the complete development Gateway in an isolated container with:
-
-- ephemeral OpenClaw state
-- plugin source mounted read-only
-- dedicated writable build and state volumes
-- no host home-directory mount
-- no Docker socket
-- disabled network by default
-- only the development Gateway port exposed
-
-Possible future command:
-
-```bash
-openclaw devguard run --secure
-```
-
-### Tool fixtures and replay
-
-Allow developers to define deterministic fake tool results and replay previously captured calls.
-
-### Interactive approval UI
-
-Provide a terminal or browser approval surface for `approve` mode.
-
-## v0.1 Implementation Order
-
-### Phase 1: Package and CLI skeleton
-
-- create package
-- register `openclaw devguard`
-- define configuration schema
-- implement development-profile detection
-- implement configuration snapshot and restore
-
-### Phase 2: Tool capture
-
-- register high-priority `before_tool_call`
-- classify tool effects
-- implement deny policy
-- implement unknown-tool denial
-- implement redaction
-- write JSONL events
-
-### Phase 3: Development runner
-
-- link and enable target plugin
-- run build and validation commands
-- start the development Gateway
-- implement file watching
-- implement controlled restart
-- verify loaded build
-
-### Phase 4: Diagnostics
-
-- implement `tail`
-- implement `doctor`
-- aggregate OpenClaw plugin inspection
-- enable lifecycle tracing
-- improve startup and failure reporting
-
-### Phase 5: Hardening
-
-- add fail-closed startup checks
-- test restoration after crashes
-- test redaction
-- test stale-build detection
-- document security boundaries
-- add integration tests
-
-## Acceptance Criteria
-
-v0.1 is complete when all of the following are true:
-
-1. A developer can initialize DevGuard against an external OpenClaw plugin repository with one command.
-2. The normal OpenClaw profile and credentials are not used.
-3. Ambient messaging channels are not connected.
-4. A test agent can attempt an `exec` call without the command executing.
-5. The attempted command appears in the DevGuard log.
-6. Filesystem mutation attempts are blocked and recorded.
-7. Unknown tools are blocked by default.
-8. Sensitive environment values are redacted.
-9. Editing the target plugin triggers a build and controlled Gateway restart.
-10. The developer can determine which plugin build is currently loaded.
-11. Plugin validation and runtime registration failures are clearly reported.
-12. `doctor` detects unsafe or incorrect configuration.
-13. `restore` returns the development profile to its previous configuration.
-14. Documentation clearly explains that plugin code itself still runs on the host.
-
-## Product Positioning
-
-DevGuard should be positioned as:
-
-> A reproducible, inspectable, fail-closed development environment for OpenClaw plugins.
-
-It is not merely another production approval or policy plugin.
-
-Its main value is combining:
-
-- isolated development-profile management
-- local plugin linking
-- automatic build and Gateway restart
-- tool-call capture
-- fail-closed blocking
-- safe redaction
-- correlated logs
-- runtime diagnostics
-- reversible configuration
+## Stable Release Direction
+
+`1.0.0` does not require every candidate feature. The current isolated-profile, `probe`/`deny`, bounded supervision, audit, diagnostics, and restoration contract has no remaining Required backlog item; it must remain covered and truthful through release preparation.
+
+Any candidate mode included before `1.0.0` must have focused tests, CI-first operational evidence, accurate documentation, and fail-closed audit behavior. Unimplemented candidates must not appear in CLI help, accepted configuration, or user documentation as available functionality.
+
+The stable product remains:
+
+> A reproducible, inspectable local development supervisor for OpenClaw plugins that safely probes supported agent tool requests, blocks the rest, and makes the product boundary explicit.

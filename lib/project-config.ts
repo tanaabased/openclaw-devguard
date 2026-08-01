@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto';
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+
+import { resolveRequiredHomeDir } from 'openclaw/plugin-sdk/state-paths';
 
 export const DEVGUARD_PROJECT_FILE = 'devguard.json';
+export const DEFAULT_BUILD_TIMEOUT_SECONDS = 120;
+export const DEFAULT_VALIDATION_TIMEOUT_SECONDS = 300;
+export const DEFAULT_SHUTDOWN_GRACE_SECONDS = 5;
+
+export type DevguardPolicyMode = 'deny' | 'probe';
 
 export interface DevguardProjectConfig {
   version: 1;
@@ -13,7 +20,14 @@ export interface DevguardProjectConfig {
       command: string;
       args: string[];
     };
+    validate?: {
+      command: string;
+      args: string[];
+    };
     watch: string[];
+  };
+  policy: {
+    mode: DevguardPolicyMode;
   };
   logging: {
     environmentValueAllowlist: string[];
@@ -21,6 +35,18 @@ export interface DevguardProjectConfig {
   gateway: {
     port: number;
   };
+  supervision: {
+    buildTimeoutSeconds: number;
+    validationTimeoutSeconds: number;
+    shutdownGraceSeconds: number;
+  };
+}
+
+export interface DevguardProjectPaths {
+  logPath: string;
+  profileName: string;
+  projectStateRoot: string;
+  stateDirectory: string;
 }
 
 interface PackageMetadata {
@@ -57,52 +83,102 @@ function stringArray(value: unknown, path: string): string[] {
   return value;
 }
 
+function commandConfig(value: unknown, path: string): DevguardProjectConfig['plugin']['build'] {
+  const command = record(value, path);
+  assertExactKeys(command, ['command', 'args'], path);
+  if (typeof command.command !== 'string' || command.command.length === 0) {
+    throw new TypeError(`${path}.command must be a non-empty string`);
+  }
+  return {
+    command: command.command,
+    args: stringArray(command.args, `${path}.args`),
+  };
+}
+
+function integerInRange(value: unknown, path: string, minimum: number, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new TypeError(`${path} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return value;
+}
+
 export function parseProjectConfig(value: unknown): DevguardProjectConfig {
   const config = record(value, DEVGUARD_PROJECT_FILE);
-  assertExactKeys(config, ['version', 'plugin', 'logging', 'gateway'], DEVGUARD_PROJECT_FILE);
+  assertExactKeys(
+    config,
+    ['version', 'plugin', 'policy', 'logging', 'gateway', 'supervision'],
+    DEVGUARD_PROJECT_FILE,
+  );
   if (config.version !== 1) throw new Error(`${DEVGUARD_PROJECT_FILE} version must be 1`);
 
   const plugin = record(config.plugin, 'plugin');
-  assertExactKeys(plugin, ['id', 'build', 'watch'], 'plugin');
+  assertExactKeys(plugin, ['id', 'build', 'validate', 'watch'], 'plugin');
   if (typeof plugin.id !== 'string' || plugin.id.length === 0) {
     throw new TypeError('plugin.id must be a non-empty string');
   }
-  const build = record(plugin.build, 'plugin.build');
-  assertExactKeys(build, ['command', 'args'], 'plugin.build');
-  if (typeof build.command !== 'string' || build.command.length === 0) {
-    throw new TypeError('plugin.build.command must be a non-empty string');
+  const build = commandConfig(plugin.build, 'plugin.build');
+  const validate =
+    plugin.validate === undefined ? undefined : commandConfig(plugin.validate, 'plugin.validate');
+
+  const policy = config.policy === undefined ? { mode: 'probe' } : record(config.policy, 'policy');
+  assertExactKeys(policy, ['mode'], 'policy');
+  if (policy.mode !== 'deny' && policy.mode !== 'probe') {
+    throw new TypeError('policy.mode must be "deny" or "probe"');
   }
 
   const logging = record(config.logging, 'logging');
   assertExactKeys(logging, ['environmentValueAllowlist'], 'logging');
   const gateway = record(config.gateway, 'gateway');
   assertExactKeys(gateway, ['port'], 'gateway');
-  if (
-    typeof gateway.port !== 'number' ||
-    !Number.isInteger(gateway.port) ||
-    gateway.port < 1 ||
-    gateway.port > 65_535
-  ) {
-    throw new TypeError('gateway.port must be an integer between 1 and 65535');
-  }
+  const port = integerInRange(gateway.port, 'gateway.port', 1, 65_535);
+
+  const supervision =
+    config.supervision === undefined ? {} : record(config.supervision, 'supervision');
+  assertExactKeys(
+    supervision,
+    ['buildTimeoutSeconds', 'validationTimeoutSeconds', 'shutdownGraceSeconds'],
+    'supervision',
+  );
+  const buildTimeoutSeconds = integerInRange(
+    supervision.buildTimeoutSeconds ?? DEFAULT_BUILD_TIMEOUT_SECONDS,
+    'supervision.buildTimeoutSeconds',
+    1,
+    3_600,
+  );
+  const validationTimeoutSeconds = integerInRange(
+    supervision.validationTimeoutSeconds ?? DEFAULT_VALIDATION_TIMEOUT_SECONDS,
+    'supervision.validationTimeoutSeconds',
+    1,
+    3_600,
+  );
+  const shutdownGraceSeconds = integerInRange(
+    supervision.shutdownGraceSeconds ?? DEFAULT_SHUTDOWN_GRACE_SECONDS,
+    'supervision.shutdownGraceSeconds',
+    1,
+    60,
+  );
 
   return {
     version: 1,
     plugin: {
       id: plugin.id,
-      build: {
-        command: build.command,
-        args: stringArray(build.args, 'plugin.build.args'),
-      },
+      build,
+      ...(validate ? { validate } : {}),
       watch: stringArray(plugin.watch, 'plugin.watch'),
     },
+    policy: { mode: policy.mode },
     logging: {
       environmentValueAllowlist: stringArray(
         logging.environmentValueAllowlist,
         'logging.environmentValueAllowlist',
       ),
     },
-    gateway: { port: gateway.port },
+    gateway: { port },
+    supervision: {
+      buildTimeoutSeconds,
+      validationTimeoutSeconds,
+      shutdownGraceSeconds,
+    },
   };
 }
 
@@ -113,6 +189,29 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function findProjectRoot(startPath: string): Promise<string> {
+  const initialPath = resolve(startPath);
+  let candidate = initialPath;
+
+  while (true) {
+    try {
+      await access(join(candidate, DEVGUARD_PROJECT_FILE));
+      return candidate;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+    }
+
+    const parent = dirname(candidate);
+    if (parent === candidate) break;
+    candidate = parent;
+  }
+
+  throw new Error(
+    `Could not find ${DEVGUARD_PROJECT_FILE} in ${initialPath} or any parent directory; run "openclaw devguard init <plugin-path>" first`,
+  );
 }
 
 function inferBuild(packageMetadata: PackageMetadata): DevguardProjectConfig['plugin']['build'] {
@@ -127,6 +226,20 @@ function inferBuild(packageMetadata: PackageMetadata): DevguardProjectConfig['pl
   return { command, args: ['run', scriptName] };
 }
 
+function inferValidation(
+  packageMetadata: PackageMetadata,
+): DevguardProjectConfig['plugin']['validate'] {
+  const scripts = packageMetadata.scripts ?? {};
+  const scriptName = ['plugin:check', 'plugin:validate', 'validate'].find(
+    (candidate) => scripts[candidate],
+  );
+  if (!scriptName) return undefined;
+
+  const packageManager = packageMetadata.packageManager?.split('@')[0] ?? 'npm';
+  const command = ['bun', 'npm', 'pnpm', 'yarn'].includes(packageManager) ? packageManager : 'npm';
+  return { command, args: ['run', scriptName] };
+}
+
 async function inferWatchPaths(pluginRoot: string): Promise<string[]> {
   const candidates = [
     'src',
@@ -135,6 +248,7 @@ async function inferWatchPaths(pluginRoot: string): Promise<string[]> {
     'utils',
     'index.ts',
     'index.js',
+    'index.mjs',
     'openclaw.plugin.json',
     'package.json',
     'tsconfig.json',
@@ -158,16 +272,24 @@ export async function createProjectConfig(pluginRoot: string): Promise<DevguardP
   if (typeof manifest.id !== 'string' || manifest.id.length === 0) {
     throw new Error('openclaw.plugin.json must declare a non-empty plugin id');
   }
+  const validate = inferValidation(packageMetadata);
 
   return {
     version: 1,
     plugin: {
       id: manifest.id,
       build: inferBuild(packageMetadata),
+      ...(validate ? { validate } : {}),
       watch: await inferWatchPaths(pluginRoot),
     },
+    policy: { mode: 'probe' },
     logging: { environmentValueAllowlist: [] },
     gateway: { port: 19_001 },
+    supervision: {
+      buildTimeoutSeconds: DEFAULT_BUILD_TIMEOUT_SECONDS,
+      validationTimeoutSeconds: DEFAULT_VALIDATION_TIMEOUT_SECONDS,
+      shutdownGraceSeconds: DEFAULT_SHUTDOWN_GRACE_SECONDS,
+    },
   };
 }
 
@@ -192,16 +314,29 @@ export function resolveProjectPaths(
   pluginRoot: string,
   pluginId: string,
   environment: NodeJS.ProcessEnv = process.env,
-): { projectStateRoot: string; stateDirectory: string; logPath: string } {
+): DevguardProjectPaths {
   const normalizedRoot = resolve(pluginRoot);
   const hash = createHash('sha256').update(normalizedRoot).digest('hex').slice(0, 12);
   const slug = `${basename(pluginId).replace(/[^a-zA-Z0-9._-]+/g, '-')}-${hash}`;
+  const profileSegment =
+    basename(pluginId)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'plugin';
+  const profilePrefix = 'devguard-';
+  const profileSuffix = `-${hash}`;
+  const profileName = `${profilePrefix}${profileSegment.slice(
+    0,
+    64 - profilePrefix.length - profileSuffix.length,
+  )}${profileSuffix}`;
   const devguardHome = environment.DEVGUARD_HOME ?? join(homedir(), '.openclaw-dev', 'devguard');
   const projectStateRoot = join(devguardHome, 'projects', slug);
+  const stateDirectory = join(resolveRequiredHomeDir(environment), `.openclaw-${profileName}`);
 
   return {
-    projectStateRoot,
-    stateDirectory: join(projectStateRoot, 'state'),
     logPath: join(projectStateRoot, 'logs', 'events.jsonl'),
+    profileName,
+    projectStateRoot,
+    stateDirectory,
   };
 }

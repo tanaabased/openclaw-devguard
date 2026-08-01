@@ -1,10 +1,14 @@
 export interface GatewayStatus {
-  pluginId?: string;
-  pluginBuildId?: string;
-  hookRegistered?: boolean;
-  policyMode?: string;
+  ambientChannelsDisabled: boolean;
+  denyUnknownTools: boolean;
+  pluginId: string;
+  pluginBuildId: string;
+  hookRegistered: boolean;
+  policyMode: string;
+  profileName: string;
   logPath?: string;
   gatewayProcessId?: number;
+  stateDirectory: string;
 }
 
 export class GatewayStatusTimeoutError extends Error {
@@ -31,6 +35,9 @@ export class GatewayStatusTimeoutError extends Error {
 export interface WaitForGatewayStatusOptions {
   delay?: (milliseconds: number) => Promise<void>;
   expectedBuildId: string;
+  expectedProfileName?: string;
+  expectedPolicyMode?: string;
+  expectedStateDirectory?: string;
   isCurrent: () => boolean;
   now?: () => number;
   pollIntervalMs?: number;
@@ -38,19 +45,57 @@ export interface WaitForGatewayStatusOptions {
   timeoutMs: number;
 }
 
-function parseGatewayStatus(value: unknown): GatewayStatus {
+function recordValue(value: unknown): Record<string, unknown> | undefined {
   if (value === null || Array.isArray(value) || typeof value !== 'object') {
-    throw new TypeError('Gateway returned an invalid DevGuard status payload');
+    return undefined;
   }
-  return value as GatewayStatus;
+  return value as Record<string, unknown>;
 }
 
-function validateReadyStatus(status: GatewayStatus): void {
+/** Validates the DevGuard-owned fields returned by the live Gateway status method. */
+export function parseGatewayStatus(value: unknown): GatewayStatus {
+  const status = recordValue(value);
+  if (!status) throw new TypeError('Gateway returned an invalid DevGuard status payload');
+
+  const stringFields = ['pluginId', 'pluginBuildId', 'policyMode', 'profileName', 'stateDirectory'];
+  const booleanFields = ['ambientChannelsDisabled', 'denyUnknownTools', 'hookRegistered'];
+  const invalidField = [
+    ...stringFields.filter(
+      (field) => typeof status[field] !== 'string' || status[field].length === 0,
+    ),
+    ...booleanFields.filter((field) => typeof status[field] !== 'boolean'),
+  ][0];
+  if (invalidField) {
+    throw new TypeError(
+      `Gateway returned an invalid DevGuard status payload: ${invalidField} has an unexpected value`,
+    );
+  }
+
+  return status as unknown as GatewayStatus;
+}
+
+function validateReadyStatus(status: GatewayStatus, options: WaitForGatewayStatusOptions): void {
   if (status.hookRegistered !== true) {
     throw new Error('Gateway did not register the DevGuard hook');
   }
-  if (status.policyMode !== 'deny') {
-    throw new Error('Gateway is not using DevGuard deny mode');
+  const expectedPolicyMode = options.expectedPolicyMode ?? 'probe';
+  if (status.policyMode !== expectedPolicyMode) {
+    throw new Error(`Gateway is not using DevGuard ${expectedPolicyMode} mode`);
+  }
+  if (status.denyUnknownTools !== true) {
+    throw new Error('Gateway is not denying unknown tools');
+  }
+  if (
+    options.expectedProfileName !== undefined &&
+    status.profileName !== options.expectedProfileName
+  ) {
+    throw new Error('Gateway is not using the expected OpenClaw profile');
+  }
+  if (
+    options.expectedStateDirectory !== undefined &&
+    status.stateDirectory !== options.expectedStateDirectory
+  ) {
+    throw new Error('Gateway is not using the expected OpenClaw state directory');
   }
 }
 
@@ -85,7 +130,7 @@ export default async function waitForGatewayStatus(
     const status = parseGatewayStatus(result);
     lastObservedBuildId = status.pluginBuildId;
     if (status.pluginBuildId === options.expectedBuildId) {
-      validateReadyStatus(status);
+      validateReadyStatus(status, options);
       return status;
     }
 
