@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 interface RunOptions {
   env?: NodeJS.ProcessEnv;
@@ -72,19 +72,37 @@ try {
   await check('build the plugin runtime', () => run('bun', ['run', 'build']));
   await check('validate plugin metadata', () => run('bun', ['run', 'plugin:check']));
 
-  const { archivePath, packageResult } = await check('create the npm package archive', async () => {
-    const packed = await run(
-      'npm',
-      ['pack', '--ignore-scripts', '--json', '--pack-destination', temporaryRoot],
-      { env: environment },
-    );
-    const result = (JSON.parse(packed.output) as PackResult[])[0];
-    if (!result?.filename) throw new Error('npm pack did not report an archive');
-    assert.match(result.filename, /\.tgz$/);
-    const path = join(temporaryRoot, result.filename);
-    await access(path);
-    return { archivePath: path, packageResult: result };
-  });
+  const suppliedArchive = process.env.DEVGUARD_PACKAGE;
+  const { archivePath, packageResult } = await check(
+    suppliedArchive ? 'inspect the supplied npm package archive' : 'create the npm package archive',
+    async () => {
+      if (suppliedArchive) {
+        const archivePath = resolve(suppliedArchive);
+        await access(archivePath);
+        assert.match(archivePath, /\.tgz$/);
+        const inspected = await run(
+          'npm',
+          ['pack', archivePath, '--dry-run', '--ignore-scripts', '--json', '--offline'],
+          { env: environment },
+        );
+        const result = (JSON.parse(inspected.output) as PackResult[])[0];
+        if (!result) throw new Error('npm pack did not inspect the supplied archive');
+        return { archivePath, packageResult: result };
+      }
+
+      const packed = await run(
+        'npm',
+        ['pack', '--ignore-scripts', '--json', '--pack-destination', temporaryRoot],
+        { env: environment },
+      );
+      const result = (JSON.parse(packed.output) as PackResult[])[0];
+      if (!result?.filename) throw new Error('npm pack did not report an archive');
+      assert.match(result.filename, /\.tgz$/);
+      const archivePath = join(temporaryRoot, result.filename);
+      await access(archivePath);
+      return { archivePath, packageResult: result };
+    },
+  );
 
   const packedPaths = new Set(packageResult.files?.map(({ path }) => path));
   const requiredPaths = [
