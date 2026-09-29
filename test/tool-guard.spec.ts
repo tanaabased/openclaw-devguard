@@ -54,7 +54,11 @@ describe('lib/tool-guard', () => {
 
     const event = {
       toolName: 'exec',
-      params: { command: 'touch sentinel', env: { NODE_ENV: 'test', API_TOKEN: 'hidden' } },
+      params: {
+        command: 'touch sentinel',
+        workdir: '',
+        env: { NODE_ENV: 'test', API_TOKEN: 'hidden' },
+      },
       runId: 'run-1',
       toolCallId: 'call-1',
     };
@@ -65,6 +69,7 @@ describe('lib/tool-guard', () => {
 
     assert.ok('params' in decision);
     assert.equal(decision.params.host, 'gateway');
+    assert.equal(decision.params.workdir, '/plugin/dist');
     assert.equal(decision.params.background, false);
     assert.deepEqual(decision.params.env, {});
     assert.match(String(decision.params.command), /exec-probe-task\.js/);
@@ -102,6 +107,7 @@ describe('lib/tool-guard', () => {
     assert.deepEqual(attempt.params, {
       command: 'touch sentinel',
       env: '[captured separately]',
+      workdir: '',
     });
     assert.deepEqual(attempt.environment.gatewayProcess, [
       { name: 'API_TOKEN', present: true, length: 6, redacted: true },
@@ -130,6 +136,30 @@ describe('lib/tool-guard', () => {
     assert.equal(guard.status().policyMode, 'probe');
     assert.equal(guard.status().profileName, 'devguard-example');
     assert.match(guard.buildPromptContext()?.appendSystemContext ?? '', /not executed/);
+  });
+
+  it('should supply the probe directory when the incoming exec omits workdir', async () => {
+    const guard = createToolGuard({
+      pluginId: 'openclaw-devguard',
+      buildId: 'build-123',
+      logPath: '/tmp/devguard-test.jsonl',
+      policyMode: 'probe',
+      probeExecutablePath: '/usr/bin/node',
+      probeScriptPath: '/plugin/dist/exec-probe-task.js',
+      createProbeId: () => 'probe-omitted-workdir',
+      append: async () => {},
+    });
+    const event = {
+      toolName: 'exec',
+      params: { command: 'touch sentinel' },
+      toolCallId: 'call-omitted-workdir',
+    };
+
+    const decision = await guard.applyToolPolicy(event, { toolName: 'exec' });
+
+    assert.ok('params' in decision);
+    assert.equal(decision.params.workdir, '/plugin/dist');
+    assert.doesNotMatch(String(decision.params.command), /touch sentinel/);
   });
 
   it('should block tools that do not have a probe implementation', async () => {
