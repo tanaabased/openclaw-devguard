@@ -38,6 +38,8 @@ jobs:
           fetch-depth: 0
       - name: Set up OpenClaw
         uses: tanaabased/actions/setup-openclaw@v1
+      - name: Set up Node
+        uses: tanaabased/actions/setup-node@v1
       - name: Set up Bun
         uses: tanaabased/actions/setup-bun@v1
       - name: Install dependencies
