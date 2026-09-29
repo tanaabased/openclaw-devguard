@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { dirname } from 'node:path';
 
 import {
   buildExecProbeCommand,
@@ -297,6 +298,7 @@ export default function createToolGuard(options: ToolGuardOptions): {
         params: {
           command,
           host: 'gateway',
+          workdir: dirname(options.probeScriptPath!),
           env: {},
           background: false,
           elevated: false,
